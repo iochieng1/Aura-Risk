@@ -1,9 +1,10 @@
 package config
 
 import (
-	"os"
 	"github.com/joho/godotenv"
+	"os"
 )
+
 func Load() {
 	_ = godotenv.Load()
 }

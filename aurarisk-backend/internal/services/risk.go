@@ -1,38 +1,40 @@
 package services
+
 import (
 	"fmt"
 	"math"
+
 	"aurarisk-backend/internal/models"
 )
+
 func CalculateRiskScore(lat, lon float64, weather *OpenMeteoResponse) int {
 	baseScore := weather.Current.Precipitation * 10
 
 	forecastScore := 0.0
-hoursToCheck := 6
-if len(weather.Hourly.Precipitation) < hoursToCheck {
-	hoursToCheck = len(weather.Hourly.Precipitation)
-}
-for i := 0; i < hoursToCheck; i++ {
-	forecastScore += weather.Hourly.Precipitation[i] * 5
-}
+	hoursToCheck := 6
+	if len(weather.Hourly.Precipitation) < hoursToCheck {
+		hoursToCheck = len(weather.Hourly.Precipitation)
+	}
+	for i := 0; i < hoursToCheck; i++ {
+		forecastScore += weather.Hourly.Precipitation[i] * 5
+	}
 
-terrainFactor := math.Abs(math.Sin(lat*100)*math.Cos(lon*100)) * 20
+	terrainFactor := math.Abs(math.Sin(lat*100)*math.Cos(lon*100)) * 20
 
-weatherSeverity := 0.0
-switch {
-case weather.Current.WeatherCode >= 95:
-	weatherSeverity = 30
-case weather.Current.WeatherCode >= 80:
-	weatherSeverity = 15
-case weather.Current.WeatherCode >= 60:
-	weatherSeverity = 10
-}
+	weatherSeverity := 0.0
+	switch {
+	case weather.Current.WeatherCode >= 95:
+		weatherSeverity = 30
+	case weather.Current.WeatherCode >= 80:
+		weatherSeverity = 15
+	case weather.Current.WeatherCode >= 60:
+		weatherSeverity = 10
+	}
 
-rawScore := baseScore + forecastScore + terrainFactor + weatherSeverity
-score := int(math.Min(100, math.Max(0, rawScore)))
+	rawScore := baseScore + forecastScore + terrainFactor + weatherSeverity
+	score := int(math.Min(100, math.Max(0, rawScore)))
 
-return score
-
+	return score
 }
 
 func ScoreToLevel(score int) string {
@@ -74,32 +76,31 @@ func GetTips(level string) []string {
 	}
 	return tips[level]
 }
+
 func GenerateRiskAssessment(lat, lon float64, locationName string) (*models.RiskAssessment, error) {
 	weather, err := FetchWeatherData(lat, lon)
 	if err != nil {
 		return nil, err
 	}
 
-score := CalculateRiskScore(lat, lon, weather)
-level := ScoreToLevel(score)
-tips := GetTips(level)
+	score := CalculateRiskScore(lat, lon, weather)
+	level := ScoreToLevel(score)
+	tips := GetTips(level)
 
-summary := fmt.Sprintf(
-	"Flood risk for %s is currently %s with a risk score of %d/100.",
-	locationName, level, score,
-)
+	summary := fmt.Sprintf(
+		"Flood risk for %s is currently %s with a risk score of %d/100.",
+		locationName, level, score,
+	)
 
-return &models.RiskAssessment{
-	Location: models.Location{
-		Name: locationName,
-		Lat:  lat,
-		Lon:  lon,
-	},
-	Score:   score,
-	Level:   level,
-	Summary: summary,
-	Tips:    tips,
-}, nil
-
-
-
+	return &models.RiskAssessment{
+		Location: models.Location{
+			Name: locationName,
+			Lat:  lat,
+			Lon:  lon,
+		},
+		Score:   score,
+		Level:   level,
+		Summary: summary,
+		Tips:    tips,
+	}, nil
+}
