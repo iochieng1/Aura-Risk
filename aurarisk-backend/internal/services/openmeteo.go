@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const historicalDays = 7
+
 type OpenMeteoResponse struct {
 	Current struct {
 		Temperature2m    float64 `json:"temperature_2m"`
@@ -19,14 +21,16 @@ type OpenMeteoResponse struct {
 		Time          []string  `json:"time"`
 		Precipitation []float64 `json:"precipitation"`
 		Rain          []float64 `json:"rain"`
+		SoilMoisture  []float64 `json:"soil_moisture_0_to_7cm"`
 	} `json:"hourly"`
 }
 
 func FetchWeatherData(lat, lon float64) (*OpenMeteoResponse, error) {
 	url := fmt.Sprintf(
-		"https://api.open-meteo.com/v1/forecast?latitude=%.6f&longitude=%.6f&current=temperature_2m,relative_humidity_2m,precipitation,rain,weather_code&hourly=precipitation,rain&timezone=auto",
+		"https://api.open-meteo.com/v1/forecast?latitude=%.6f&longitude=%.6f&past_days=%d&forecast_days=1&current=temperature_2m,relative_humidity_2m,precipitation,rain,weather_code&hourly=precipitation,rain,soil_moisture_0_to_7cm&timezone=auto",
 		lat,
 		lon,
+		historicalDays,
 	)
 
 	client := &http.Client{Timeout: 10 * time.Second}
