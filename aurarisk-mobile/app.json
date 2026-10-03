@@ -7,7 +7,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,6 +23,31 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
+      "expo-background-task",
+      [
+        "expo-notifications",
+        {
+          "color": "#0b5cad",
+          "defaultChannel": "risk-alerts",
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AuraRisk uses your photo library only when you choose a photo to attach to a flood report. Location data in the photo is removed before upload.",
+          "cameraPermission": "AuraRisk uses the camera only when you take a photo to attach to a flood report.",
+          "microphonePermission": false
+        }
+      ]
+    ]
   }
 }

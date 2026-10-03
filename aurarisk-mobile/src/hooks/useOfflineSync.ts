@@ -1,52 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import NetInfo from '@react-native-community/netinfo';
-import { getReportQueue, dequeueReport, updateRetryCount } from '../storage/reportQueue';
-import { submitReport } from '../services/api';
+import { getReportQueue } from '../storage/reportQueue';
+import { flushReportQueue } from '../sync/flushReportQueue';
 
 export const useOfflineSync = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  // A ref, not state: the NetInfo listener is registered once and would otherwise see a stale value.
+  const syncingRef = useRef(false);
 
-  const syncPendingReports = async () => {
-    const queue = await getReportQueue();
-    setPendingCount(queue.length);
-
-    if (queue.length === 0 || isSyncing) return;
-
+  const syncPendingReports = useCallback(async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setIsSyncing(true);
-
-    for (const report of queue) {
-      if (report.retryCount >= 3) {
-        await dequeueReport(report.tempId);
-        continue;
-      }
-
-      try {
-        const res = await submitReport(report, true);
-        if (res.success) {
-          await dequeueReport(report.tempId);
-        } else {
-          await updateRetryCount(report.tempId);
-        }
-      } catch {
-        await updateRetryCount(report.tempId);
-      }
+    try {
+      const { remaining } = await flushReportQueue();
+      setPendingCount(remaining);
+    } catch (err) {
+      console.warn('Offline sync failed:', err);
+      setPendingCount((await getReportQueue()).length);
+    } finally {
+      syncingRef.current = false;
+      setIsSyncing(false);
     }
+  }, []);
 
-    const remainingQueue = await getReportQueue();
-    setPendingCount(remainingQueue.length);
-    setIsSyncing(false);
-  };
+  const refreshPendingCount = useCallback(async () => {
+    setPendingCount((await getReportQueue()).length);
+  }, []);
 
   useEffect(() => {
+    refreshPendingCount();
     const unsubscribe = NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable) {
+      if (state.isConnected && state.isInternetReachable !== false) {
         syncPendingReports();
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [syncPendingReports, refreshPendingCount]);
 
-  return { syncPendingReports, isSyncing, pendingCount };
+  return { syncPendingReports, refreshPendingCount, isSyncing, pendingCount };
 };
