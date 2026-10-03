@@ -1,9 +1,10 @@
 import NetInfo from '@react-native-community/netinfo';
+import { authFetch } from '../auth/authClient';
+import { API_BASE_URL, fetchWithTimeout } from '../config';
+import { uploadReportPhotos } from '../photos/upload';
 import { RiskData, CommunityReport } from '../types/api';
 import { saveRiskToCache, getCachedRisk, saveReportsToCache, getCachedReports } from '../storage/cache';
-import { enqueueReport, QueuedReport } from '../storage/reportQueue';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+import { enqueueReport, NewReport, QueuedReport } from '../storage/reportQueue';
 
 export interface RiskFetchResult {
   data: RiskData | null;
@@ -12,10 +13,13 @@ export interface RiskFetchResult {
   error?: string;
 }
 
-export const fetchRiskAssessment = async (lat: number, lon: number): Promise<RiskFetchResult> => {
+export const isOnline = async (): Promise<boolean> => {
   const netState = await NetInfo.fetch();
+  return Boolean(netState.isConnected && netState.isInternetReachable !== false);
+};
 
-  if (!netState.isConnected || !netState.isInternetReachable) {
+export const fetchRiskAssessment = async (lat: number, lon: number): Promise<RiskFetchResult> => {
+  if (!(await isOnline())) {
     const cached = await getCachedRisk(lat, lon);
     return cached
       ? { data: cached.data, isOffline: true, isStale: cached.isStale }
@@ -23,14 +27,14 @@ export const fetchRiskAssessment = async (lat: number, lon: number): Promise<Ris
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/risk?lat=${lat}&lon=${lon}`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/api/risk?lat=${lat}&lon=${lon}`);
     if (!response.ok) throw new Error(`HTTP error ${response.status}`);
 
     const data: RiskData = await response.json();
-    saveRiskToCache(lat, lon, data);
+    await saveRiskToCache(lat, lon, data);
 
     return { data, isOffline: false, isStale: false };
-  } catch (err) {
+  } catch {
     const cached = await getCachedRisk(lat, lon);
     return cached
       ? { data: cached.data, isOffline: true, isStale: cached.isStale }
@@ -39,15 +43,13 @@ export const fetchRiskAssessment = async (lat: number, lon: number): Promise<Ris
 };
 
 export const fetchNearbyReports = async (lat: number, lon: number, radius = 10): Promise<{ reports: CommunityReport[]; isOffline: boolean }> => {
-  const netState = await NetInfo.fetch();
-
-  if (!netState.isConnected || !netState.isInternetReachable) {
+  if (!(await isOnline())) {
     const cachedReports = await getCachedReports(lat, lon);
     return { reports: cachedReports, isOffline: true };
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/reports?lat=${lat}&lon=${lon}&radius=${radius}`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/api/reports?lat=${lat}&lon=${lon}&radius=${radius}`);
     if (!response.ok) throw new Error(`HTTP error ${response.status}`);
 
     const reports: CommunityReport[] = await response.json();
@@ -60,34 +62,68 @@ export const fetchNearbyReports = async (lat: number, lon: number, radius = 10):
   }
 };
 
-export const submitReport = async (
-  report: Omit<CommunityReport, 'createdAt'>,
-  isRetry = false
-): Promise<{ success: boolean; queued: boolean; item?: QueuedReport }> => {
-  const netState = await NetInfo.fetch();
+export class ReportRejectedError extends Error {}
 
-  if (!netState.isConnected || !netState.isInternetReachable) {
-    if (!isRetry) {
-      const queuedItem = await enqueueReport(report);
-      return { success: true, queued: true, item: queuedItem };
+/** Creates the report as the signed-in device account and returns its server id. */
+export const createReport = async (report: NewReport): Promise<string> => {
+  const response = await authFetch('/api/reports', {
+    method: 'POST',
+    body: JSON.stringify({
+      location: { name: report.location.name, lat: report.location.lat, lon: report.location.lon },
+      category: report.category,
+      note: report.note,
+    }),
+  });
+
+  if (!response.ok) {
+    const message = `Server status ${response.status}`;
+    // 4xx (other than auth/rate limiting) means the report itself is invalid; retrying won't help.
+    if (response.status >= 400 && response.status < 500 && response.status !== 401 && response.status !== 429) {
+      throw new ReportRejectedError(message);
     }
-    return { success: false, queued: false };
+    throw new Error(message);
+  }
+  const created: CommunityReport = await response.json();
+  if (!created.id) throw new Error('Server did not return a report id');
+  return created.id;
+};
+
+export interface SubmitResult {
+  success: boolean;
+  queued: boolean;
+  reportId?: string;
+  item?: QueuedReport;
+}
+
+/**
+ * Submits a report with optional photos (local URIs from photoStore). Anything that can't be sent
+ * right now is queued. If the report was created but a photo failed, the queued item carries the
+ * server id so a retry only uploads the remaining photos.
+ */
+export const submitReport = async (report: NewReport, photos: string[] = []): Promise<SubmitResult> => {
+  if (!(await isOnline())) {
+    const item = await enqueueReport(report, photos);
+    return { success: true, queued: true, item };
   }
 
+  let reportId: string;
   try {
-    const response = await fetch(`${API_BASE_URL}/api/reports`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(report),
-    });
-
-    if (!response.ok) throw new Error(`Server status ${response.status}`);
-    return { success: true, queued: false };
+    reportId = await createReport(report);
   } catch (err) {
-    if (!isRetry) {
-      const queuedItem = await enqueueReport(report);
-      return { success: true, queued: true, item: queuedItem };
-    }
-    throw err;
+    if (err instanceof ReportRejectedError) throw err;
+    const item = await enqueueReport(report, photos);
+    return { success: true, queued: true, item };
   }
+
+  const remaining = [...photos];
+  try {
+    await uploadReportPhotos(reportId, photos, (uri) => {
+      remaining.splice(remaining.indexOf(uri), 1);
+    });
+  } catch {
+    const item = await enqueueReport(report, remaining, reportId);
+    return { success: true, queued: true, reportId, item };
+  }
+
+  return { success: true, queued: false, reportId };
 };
