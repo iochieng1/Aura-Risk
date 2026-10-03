@@ -17,5 +17,55 @@ services:
       timeout: 5s
       retries: 10
 
+  # S3-compatible object storage for photo attachments (local development only).
+  objectstore:
+    image: rustfs/rustfs:1.0.1
+    container_name: aurarisk-objectstore
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: aurarisk
+      RUSTFS_SECRET_KEY: aurarisk-dev-secret
+    ports:
+      - "9000:9000"
+    volumes:
+      - aurarisk_objects:/data
+
+  objectstore-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - objectstore
+    environment:
+      AWS_ACCESS_KEY_ID: aurarisk
+      AWS_SECRET_ACCESS_KEY: aurarisk-dev-secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for i in $$(seq 1 30); do
+          aws --endpoint-url http://objectstore:9000 s3api head-bucket --bucket aurarisk-photos 2>/dev/null && exit 0
+          aws --endpoint-url http://objectstore:9000 s3api create-bucket --bucket aurarisk-photos && exit 0
+          sleep 2
+        done
+        exit 1
+    restart: "no"
+
+  # Malware scanner for uploaded photos. First start downloads signatures (~1-3 min).
+  clamav:
+    image: clamav/clamav:stable
+    container_name: aurarisk-clamav
+    restart: unless-stopped
+    ports:
+      - "3310:3310"
+    volumes:
+      - aurarisk_clamdb:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 5
+
 volumes:
   aurarisk_pgdata:
+  aurarisk_objects:
+  aurarisk_clamdb:

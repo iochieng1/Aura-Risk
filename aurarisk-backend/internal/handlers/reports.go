@@ -99,6 +99,22 @@ func GetReports(c *gin.Context) {
 		reports = []models.CommunityReport{}
 	}
 
+	reportIDs := make([]string, len(reports))
+	for i, r := range reports {
+		reportIDs[i] = r.ID
+	}
+	photos, err := readyPhotosByReport(c, reportIDs)
+	if err != nil {
+		internalError(c, err)
+		return
+	}
+	for i := range reports {
+		reports[i].Photos = photos[reports[i].ID]
+		if reports[i].Photos == nil {
+			reports[i].Photos = []models.ReportPhoto{}
+		}
+	}
+
 	c.JSON(http.StatusOK, reports)
 }
 
@@ -126,9 +142,25 @@ func CreateReport(c *gin.Context) {
 		return
 	}
 
+	if req.Location.Lat < -90 || req.Location.Lat > 90 || req.Location.Lon < -180 || req.Location.Lon > 180 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coordinates"})
+		return
+	}
+
+	if len(req.Location.Name) > 200 || len(req.Note) > 2000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "location name or note is too long"})
+		return
+	}
+
+	// Reports from signed-in devices are owned so photos can be attached.
+	var accountID sql.NullString
+	if id := c.GetString(ctxAccountID); id != "" {
+		accountID = sql.NullString{String: id, Valid: true}
+	}
+
 	query := `
-		INSERT INTO community_reports (location_name, lat, lon, category, note)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO community_reports (location_name, lat, lon, category, note, account_id)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, created_at
 	`
 
@@ -141,6 +173,7 @@ func CreateReport(c *gin.Context) {
 		req.Location.Lon,
 		req.Category,
 		req.Note,
+		accountID,
 	).Scan(&id, &createdAt)
 
 	if err != nil {
@@ -158,6 +191,7 @@ func CreateReport(c *gin.Context) {
 		Category:  req.Category,
 		Note:      req.Note,
 		Timestamp: createdAt,
+		Photos:    []models.ReportPhoto{},
 	}
 
 	c.JSON(http.StatusCreated, report)
