@@ -189,8 +189,10 @@ TEST_DATABASE_URL=postgres://... go test ./internal/workers/
 | `S3_ENDPOINT` | AWS | Internal endpoint, e.g. `http://localhost:9000` for MinIO |
 | `S3_PUBLIC_ENDPOINT` | `S3_ENDPOINT` | Endpoint used in presigned URLs, must be reachable from phones |
 | `S3_FORCE_PATH_STYLE` | `false` | `true` for MinIO |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | - | Standard AWS credential chain |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | - | Standard AWS credential chain ; set both or neither |
 | `CLAMD_ADDR` | - | `host:port` of clamd; unset means photos are never published |
 | `EXPO_PUSH_URL` | `https://exp.host/--/api/v2/push/send` | |
-| `EXPO_ACCESS_TOKEN` | - | Optional Expo push security token |
+| `EXPO_ACCESS_TOKEN` | - | Expo push security token; required when `APP_ENV=production` and the notifier is enabled |
 | `NOTIFIER_INTERVAL` | `15m` | `0` disables the notifier |
+
+Secret variables can also be loaded from files (`*_FILE`) or AWS Secrets Manager (`awssm://`); see [ARCHITECTURE.md](ARCHITECTURE.md#secrets-and-production-configuration).

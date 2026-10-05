@@ -1,18 +1,20 @@
+# Credentials come from the repo-root .env (cp .env.example .env).
+# Compose refuses to start if any of them are missing.
 services:
   postgres:
     image: postgres:16-alpine
     container_name: aurarisk-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: aurarisk
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-aurarisk}
     ports:
       - "5432:5432"
     volumes:
       - aurarisk_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d aurarisk"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -23,8 +25,8 @@ services:
     container_name: aurarisk-objectstore
     restart: unless-stopped
     environment:
-      RUSTFS_ACCESS_KEY: aurarisk
-      RUSTFS_SECRET_KEY: aurarisk-dev-secret
+      RUSTFS_ACCESS_KEY: ${AWS_ACCESS_KEY_ID:?set AWS_ACCESS_KEY_ID in .env}
+      RUSTFS_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY:?set AWS_SECRET_ACCESS_KEY in .env}
     ports:
       - "9000:9000"
     volumes:
@@ -35,8 +37,8 @@ services:
     depends_on:
       - objectstore
     environment:
-      AWS_ACCESS_KEY_ID: aurarisk
-      AWS_SECRET_ACCESS_KEY: aurarisk-dev-secret
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?set AWS_ACCESS_KEY_ID in .env}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?set AWS_SECRET_ACCESS_KEY in .env}
       AWS_DEFAULT_REGION: us-east-1
     entrypoint: ["/bin/sh", "-c"]
     command:

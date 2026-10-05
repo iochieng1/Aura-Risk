@@ -22,10 +22,15 @@ import (
 const maxJSONBodyBytes = 64 << 10
 
 func main() {
-	config.Load()
-
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	loadCtx, cancelLoad := context.WithTimeout(ctx, 30*time.Second)
+	err := config.Load(loadCtx)
+	cancelLoad()
+	if err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
 
 	db := database.Connect()
 	defer db.Close()
@@ -61,7 +66,7 @@ func main() {
 		go processor.Run(ctx)
 	}
 
-	if interval := config.GetDuration("NOTIFIER_INTERVAL", 15*time.Minute); interval > 0 {
+	if interval := config.GetDuration("NOTIFIER_INTERVAL", config.DefaultNotifierInterval); interval > 0 {
 		notifier := &workers.Notifier{
 			DB:       db,
 			Push:     services.NewExpoPushClient(config.GetEnv("EXPO_PUSH_URL", ""), config.GetEnv("EXPO_ACCESS_TOKEN", "")),
