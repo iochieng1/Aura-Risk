@@ -26,12 +26,9 @@ cd /workspaces/Aura-Risk
 cp .env.example .env
 ```
 
-The example file contains:
+Edit `.env` and replace the `change-me-*` placeholders with your own local passwords. Docker Compose reads the same file and refuses to start if `POSTGRES_PASSWORD`, `AWS_ACCESS_KEY_ID`, or `AWS_SECRET_ACCESS_KEY` are missing. The backend has no built-in database URL and exits at startup if `DATABASE_URL` is not set.
 
-```env
-PORT=8080
-DATABASE_URL=postgres://postgres:password@localhost:5432/aurarisk?sslmode=disable
-```
+See [Secrets and production configuration](docs/ARCHITECTURE.md#secrets-and-production-configuration) for `APP_ENV=production`, mounted secret files, and AWS Secrets Manager.
 
 3. Run the backend:
 
@@ -71,6 +68,6 @@ The backend was verified to build and run successfully with the database availab
 
 ### Troubleshooting
 - If PostgreSQL is not reachable, start it again with `docker compose up -d postgres`.
-- If the app cannot connect to the database, check that the `DATABASE_URL` matches the local Postgres container.
+- If the app cannot connect to the database, check that the `DATABASE_URL` matches the local Postgres container. Postgres only applies `POSTGRES_PASSWORD` when it first creates its volume, so an existing `aurarisk_pgdata` volume keeps its old password; either keep using it in `.env` or run `docker compose down -v` to recreate the database.
 - If a dependency issue occurs, run `go mod tidy` inside `aurarisk-backend`.
 

@@ -52,7 +52,27 @@ cd aurarisk-backend
 go run .
 ```
 
-The backend reads `DATABASE_URL` and `PORT` from the environment. The local fallback database URL is intended only for development.
+The backend reads `DATABASE_URL` and `PORT` from the environment (or a `.env` in `aurarisk-backend/` or the repo root). There is no fallback database URL: startup fails if `DATABASE_URL` is missing.
+
+### Secrets and production configuration
+
+`APP_ENV` is `development` (default) or `production`; any other value aborts startup. In production the backend also refuses to start when:
+
+- `DATABASE_URL` contains a development password (`password`, `postgres`, or a `change-me*` placeholder).
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, or `EXPO_ACCESS_TOKEN` hold a development value.
+- `EXPO_ACCESS_TOKEN` is empty while the notifier is enabled (`NOTIFIER_INTERVAL` not `0`).
+
+In every environment `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` must be set together or not at all (leave both unset to use an IAM role). All problems are reported together.
+
+Each secret variable (`DATABASE_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `EXPO_ACCESS_TOKEN`) can be supplied in one of three ways:
+
+| Form | Example | Notes |
+|---|---|---|
+| Plain value | `DATABASE_URL=postgres://...` | Local development |
+| Mounted file | `DATABASE_URL_FILE=/run/secrets/database_url` | Docker/Kubernetes secrets; trailing newline is trimmed. Setting both `KEY` and `KEY_FILE` is an error. |
+| AWS Secrets Manager | `DATABASE_URL=awssm://prod/aurarisk#database_url` | Secret name or ARN. `#field` selects a string field from a JSON secret; omit it to use the whole secret. |
+
+Secrets Manager uses the standard AWS credential chain and `AWS_REGION` (or the region in an ARN), and needs `secretsmanager:GetSecretValue` on the referenced secrets. File references are resolved before Secrets Manager, so AWS credentials can come from files. Each secret is fetched once at startup, so rotating a value requires a restart.
 
 ### Frontend
 
@@ -82,7 +102,7 @@ The app is suitable for a development demo or pilot, but it should not yet be us
 ### Launch blockers
 
 1. **Use real frontend mode.** Replace the mock default with a build-time API base URL and environment-specific configuration. Avoid compiling mock behavior into a production build.
-2. **Remove default secrets and credentials.** The Compose file contains a development database password, and the backend has a fallback DSN. Use a secret manager and fail startup when production configuration is missing.
+2. ~~**Remove default secrets and credentials.**~~ Done: Compose and the backend no longer ship credentials, production startup fails on missing or development secrets, and secrets can come from mounted files or AWS Secrets Manager (see [Secrets and production configuration](#secrets-and-production-configuration)).
 3. **Secure report creation.** Add authentication or abuse controls, request size limits, strict latitude/longitude validation, note length limits, spam protection, moderation, and audit logging.
 4. **Add database migrations.** Run versioned migrations as a deployment step instead of embedding schema creation in application startup. Add constraints and indexes appropriate for geographic queries.
 5. **Harden the API.** Add structured error responses, request IDs, CORS allowlists, rate limiting, timeouts, graceful shutdown, and health checks that distinguish process health from database and provider health.

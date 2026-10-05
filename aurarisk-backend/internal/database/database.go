@@ -13,7 +13,7 @@ import (
 func Connect() *sql.DB {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://postgres:password@localhost:5432/aurarisk?sslmode=disable"
+		log.Fatal("DATABASE_URL is not set")
 	}
 
 	db, err := sql.Open("postgres", dsn)
