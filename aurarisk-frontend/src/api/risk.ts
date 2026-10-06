@@ -1,25 +1,20 @@
 import type { Location, RiskAssessment, CommunityReport, ReportCategory } from "../types";
+import { createApiClient, validateNewReport, ValidationError } from "@aurarisk/shared";
 import { getMockRisk, getMockReports } from "../utils/mock";
 
 const USE_BACKEND = false;
-const BASE = "/api";
+
+// Same-origin: Vite proxies /api to the backend in development.
+const api = createApiClient({ baseUrl: "" });
 
 export async function fetchRisk(location: Location): Promise<RiskAssessment> {
   if (!USE_BACKEND) return getMockRisk(location);
-
-  const res = await fetch(`${BASE}/risk?lat=${location.lat}&lon=${location.lon}`);
-  if (!res.ok) throw new Error("Failed to fetch risk");
-  return res.json();
+  return api.getRisk(location);
 }
 
 export async function fetchReports(location: Location): Promise<CommunityReport[]> {
   if (!USE_BACKEND) return getMockReports();
-
-  const res = await fetch(
-    `${BASE}/reports?lat=${location.lat}&lon=${location.lon}&radius=10`
-  );
-  if (!res.ok) throw new Error("Failed to fetch reports");
-  return res.json();
+  return api.getReports(location, 10);
 }
 
 export async function submitReport(
@@ -27,21 +22,13 @@ export async function submitReport(
   category: ReportCategory,
   note: string
 ): Promise<CommunityReport> {
-  const report: CommunityReport = {
+  if (USE_BACKEND) return api.createReport({ location, category, note });
+
+  const checked = validateNewReport({ location, category, note });
+  if (!checked.ok) throw new ValidationError(checked.errors);
+  return {
     id: crypto.randomUUID(),
-    location,
-    category,
-    note,
+    ...checked.value,
     timestamp: new Date().toISOString(),
   };
-
-  if (!USE_BACKEND) return report;
-
-  const res = await fetch(`${BASE}/reports`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ location, category, note }),
-  });
-  if (!res.ok) throw new Error("Failed to submit report");
-  return res.json();
 }

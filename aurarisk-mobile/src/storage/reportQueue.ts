@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CommunityReport } from '../types/api';
+import { NewReportInput } from '../types/api';
 
 const QUEUE_KEY = '@aurarisk/offline_reports_queue';
 
-export interface QueuedReport extends Omit<CommunityReport, 'photos'> {
+export interface QueuedReport extends NewReportInput {
   tempId: string;
   retryCount: number;
   createdAt: string;
@@ -13,7 +13,7 @@ export interface QueuedReport extends Omit<CommunityReport, 'photos'> {
   serverReportId?: string;
 }
 
-export type NewReport = Omit<CommunityReport, 'createdAt' | 'photos'>;
+export type NewReport = NewReportInput;
 
 const writeQueue = (queue: QueuedReport[]) => AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 

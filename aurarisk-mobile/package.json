@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@aurarisk/shared": "file:../packages/shared",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
     "@types/jest": "29.5.14",
@@ -14,6 +15,7 @@
     "expo-file-system": "~57.0.7",
     "expo-image-manipulator": "~57.0.20",
     "expo-image-picker": "~57.0.20",
+    "expo-location": "~57.0.20",
     "expo-notifications": "~57.0.21",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
@@ -40,6 +42,13 @@
   },
   "private": true,
   "jest": {
-    "preset": "jest-expo"
+    "preset": "jest-expo",
+    "roots": [
+      "<rootDir>",
+      "<rootDir>/../packages/shared"
+    ],
+    "modulePaths": [
+      "<rootDir>/node_modules"
+    ]
   }
 }
