@@ -71,3 +71,10 @@ The backend was verified to build and run successfully with the database availab
 - If the app cannot connect to the database, check that the `DATABASE_URL` matches the local Postgres container. Postgres only applies `POSTGRES_PASSWORD` when it first creates its volume, so an existing `aurarisk_pgdata` volume keeps its old password; either keep using it in `.env` or run `docker compose down -v` to recreate the database.
 - If a dependency issue occurs, run `go mod tidy` inside `aurarisk-backend`.
 
+## Web and mobile clients
+
+- `aurarisk-frontend/`: Vite + React web app (`npm install && npm run dev`)
+- `aurarisk-mobile/`: Expo app (`npm install && npx expo start`). Set `EXPO_PUBLIC_API_BASE_URL` to an address the device can reach (for example `http://10.0.2.2:8080` on the Android emulator).
+- `packages/shared/`: API types, client, and validation used by both. See [its README](packages/shared/README.md).
+
+The mobile app picks a location from the device's GPS when the user allows it. If permission is denied, blocked, or location services are off, the user can still search for a place or type coordinates.

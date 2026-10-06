@@ -1,0 +1,9 @@
+{
+  "name": "@aurarisk/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Types, API client, and validation shared by the AuraRisk web and mobile apps.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false
+}

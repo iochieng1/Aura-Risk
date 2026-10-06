@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isCommunityReport, isRiskAssessment } from '@aurarisk/shared';
 import { RiskData, CommunityReport, CachedData } from '../types/api';
 
 const CACHE_KEYS = {
@@ -26,6 +27,8 @@ export const getCachedRisk = async (lat: number, lon: number): Promise<{ data: R
     if (!raw) return null;
 
     const parsed: CachedData<RiskData> = JSON.parse(raw);
+    // Entries written by older app versions used a different shape; treat them as a cache miss.
+    if (!isRiskAssessment(parsed.data)) return null;
     const isStale = Date.now() - parsed.timestamp > MAX_STALE_MS;
 
     return { data: parsed.data, isStale };
@@ -52,7 +55,7 @@ export const getCachedReports = async (lat: number, lon: number): Promise<Commun
     const raw = await AsyncStorage.getItem(`${CACHE_KEYS.LAST_REPORTS}_${lat.toFixed(2)}_${lon.toFixed(2)}`);
     if (!raw) return [];
     const parsed: CachedData<CommunityReport[]> = JSON.parse(raw);
-    return parsed.data;
+    return Array.isArray(parsed.data) ? parsed.data.filter(isCommunityReport) : [];
   } catch (err) {
     console.error('Failed to retrieve cached reports:', err);
     return [];

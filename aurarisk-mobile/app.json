@@ -47,6 +47,12 @@
           "cameraPermission": "AuraRisk uses the camera only when you take a photo to attach to a flood report.",
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AuraRisk uses your location only when you tap \"Use my location\" to check flood risk or place a report. You can always search or enter coordinates instead."
+        }
       ]
     ]
   }

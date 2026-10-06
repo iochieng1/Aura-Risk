@@ -1,3 +1,4 @@
+import { ApiError, createApiClient, type FieldErrors, validateNewReport, ValidationError } from '@aurarisk/shared';
 import NetInfo from '@react-native-community/netinfo';
 import { authFetch } from '../auth/authClient';
 import { API_BASE_URL, fetchWithTimeout } from '../config';
@@ -5,6 +6,12 @@ import { uploadReportPhotos } from '../photos/upload';
 import { RiskData, CommunityReport } from '../types/api';
 import { saveRiskToCache, getCachedRisk, saveReportsToCache, getCachedReports } from '../storage/cache';
 import { enqueueReport, NewReport, QueuedReport } from '../storage/reportQueue';
+
+/** Unauthenticated endpoints (risk, nearby reports). */
+export const publicApi = createApiClient({ baseUrl: API_BASE_URL, fetch: fetchWithTimeout });
+
+// authFetch prefixes API_BASE_URL itself and handles token refresh, so this client sends bare paths.
+const deviceApi = createApiClient({ baseUrl: '', fetch: authFetch });
 
 export interface RiskFetchResult {
   data: RiskData | null;
@@ -27,10 +34,7 @@ export const fetchRiskAssessment = async (lat: number, lon: number): Promise<Ris
   }
 
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/api/risk?lat=${lat}&lon=${lon}`);
-    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-
-    const data: RiskData = await response.json();
+    const data: RiskData = await publicApi.getRisk({ lat, lon });
     await saveRiskToCache(lat, lon, data);
 
     return { data, isOffline: false, isStale: false };
@@ -49,10 +53,7 @@ export const fetchNearbyReports = async (lat: number, lon: number, radius = 10):
   }
 
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/api/reports?lat=${lat}&lon=${lon}&radius=${radius}`);
-    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-
-    const reports: CommunityReport[] = await response.json();
+    const reports: CommunityReport[] = await publicApi.getReports({ lat, lon }, radius);
     saveReportsToCache(lat, lon, reports);
 
     return { reports, isOffline: false };
@@ -64,28 +65,30 @@ export const fetchNearbyReports = async (lat: number, lon: number, radius = 10):
 
 export class ReportRejectedError extends Error {}
 
+/** The report failed local validation; `errors` is keyed by field (name, lat, lon, category, note). */
+export class ReportValidationError extends ReportRejectedError {
+  constructor(readonly errors: FieldErrors) {
+    super(Object.values(errors)[0] ?? 'Invalid report');
+  }
+}
+
 /** Creates the report as the signed-in device account and returns its server id. */
 export const createReport = async (report: NewReport): Promise<string> => {
-  const response = await authFetch('/api/reports', {
-    method: 'POST',
-    body: JSON.stringify({
-      location: { name: report.location.name, lat: report.location.lat, lon: report.location.lon },
+  try {
+    const created = await deviceApi.createReport({
+      location: report.location,
       category: report.category,
       note: report.note,
-    }),
-  });
-
-  if (!response.ok) {
-    const message = `Server status ${response.status}`;
-    // 4xx (other than auth/rate limiting) means the report itself is invalid; retrying won't help.
-    if (response.status >= 400 && response.status < 500 && response.status !== 401 && response.status !== 429) {
-      throw new ReportRejectedError(message);
+    });
+    return created.id;
+  } catch (err) {
+    // Invalid input, or a 4xx (other than auth/rate limiting), means retrying won't help.
+    if (err instanceof ValidationError) throw new ReportRejectedError(err.message);
+    if (err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 429) {
+      throw new ReportRejectedError(err.message);
     }
-    throw new Error(message);
+    throw err;
   }
-  const created: CommunityReport = await response.json();
-  if (!created.id) throw new Error('Server did not return a report id');
-  return created.id;
 };
 
 export interface SubmitResult {
@@ -100,7 +103,12 @@ export interface SubmitResult {
  * right now is queued. If the report was created but a photo failed, the queued item carries the
  * server id so a retry only uploads the remaining photos.
  */
-export const submitReport = async (report: NewReport, photos: string[] = []): Promise<SubmitResult> => {
+export const submitReport = async (input: NewReport, photos: string[] = []): Promise<SubmitResult> => {
+  // Validate before queueing so an invalid report is never stored offline only to be dropped later.
+  const checked = validateNewReport(input);
+  if (!checked.ok) throw new ReportValidationError(checked.errors);
+  const report = checked.value;
+
   if (!(await isOnline())) {
     const item = await enqueueReport(report, photos);
     return { success: true, queued: true, item };
