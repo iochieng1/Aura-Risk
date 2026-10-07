@@ -123,7 +123,7 @@ func ListModerationQueue(c *gin.Context) {
 		before = sql.NullString{String: t.UTC().Format("2006-01-02 15:04:05.999999"), Valid: true}
 	}
 
-	rows, err := db.QueryContext(c, `
+	rows, err := db.QueryContext(c.Request.Context(), `
 		SELECT `+moderationReportColumns+`
 		FROM community_reports r
 		WHERE r.moderation_status = $1 AND ($2::timestamp IS NULL OR r.created_at < $2::timestamp) `+duplicateFilter+`
@@ -203,7 +203,7 @@ func ModerateReport(c *gin.Context) {
 	}
 	moderator := c.GetString(ctxModerator)
 
-	tx, err := db.BeginTx(c, nil)
+	tx, err := db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -211,7 +211,7 @@ func ModerateReport(c *gin.Context) {
 	defer tx.Rollback()
 
 	var current string
-	err = tx.QueryRowContext(c, `SELECT moderation_status FROM community_reports WHERE id = $1 FOR UPDATE`, reportID).Scan(&current)
+	err = tx.QueryRowContext(c.Request.Context(), `SELECT moderation_status FROM community_reports WHERE id = $1 FOR UPDATE`, reportID).Scan(&current)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
 		return
@@ -223,7 +223,7 @@ func ModerateReport(c *gin.Context) {
 
 	moderatedBy := sql.NullString{String: moderator, Valid: req.Status != services.ReportPending}
 	reason := sql.NullString{String: req.Reason, Valid: req.Reason != ""}
-	if _, err := tx.ExecContext(c, `
+	if _, err := tx.ExecContext(c.Request.Context(), `
 		UPDATE community_reports
 		SET moderation_status = $2, moderated_by = $3, moderation_reason = $4, status_updated_at = NOW(),
 			duplicate_of = CASE WHEN $5 THEN NULL ELSE duplicate_of END
@@ -237,7 +237,7 @@ func ModerateReport(c *gin.Context) {
 	if req.NotDuplicate {
 		eventReason = "marked not a duplicate. " + eventReason
 	}
-	if _, err := tx.ExecContext(c, `
+	if _, err := tx.ExecContext(c.Request.Context(), `
 		INSERT INTO report_moderation_events (report_id, from_status, to_status, actor, reason)
 		VALUES ($1, $2, $3, $4, $5)
 	`, reportID, current, req.Status, moderator, sql.NullString{String: eventReason, Valid: eventReason != ""}); err != nil {
@@ -245,7 +245,7 @@ func ModerateReport(c *gin.Context) {
 		return
 	}
 
-	report, err := scanModerationReport(tx.QueryRowContext(c, `
+	report, err := scanModerationReport(tx.QueryRowContext(c.Request.Context(), `
 		SELECT `+moderationReportColumns+` FROM community_reports r WHERE r.id = $1
 	`, reportID))
 	if err != nil {
@@ -265,7 +265,7 @@ func ListModerationEvents(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
 		return
 	}
-	rows, err := db.QueryContext(c, `
+	rows, err := db.QueryContext(c.Request.Context(), `
 		SELECT from_status, to_status, actor, reason, created_at
 		FROM report_moderation_events
 		WHERE report_id = $1

@@ -172,7 +172,7 @@ func CreateReport(c *gin.Context) {
 		accountID = sql.NullString{String: id, Valid: true}
 	}
 
-	tx, err := db.BeginTx(c, nil)
+	tx, err := db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		internalError(c, err)
 		return
