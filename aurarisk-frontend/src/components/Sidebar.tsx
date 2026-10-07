@@ -10,7 +10,9 @@ interface Props {
   risk: RiskAssessment | null;
   reports: CommunityReport[];
   selectedLocation: Location | null;
-  onSubmitReport: (category: ReportCategory, note: string) => void;
+  loading: boolean;
+  loadError: string | null;
+  onSubmitReport: (category: ReportCategory, note: string) => Promise<CommunityReport>;
   open: boolean;
   onClose: () => void;
 }
@@ -20,6 +22,8 @@ export default function Sidebar({
   risk,
   reports,
   selectedLocation,
+  loading,
+  loadError,
   onSubmitReport,
   open,
   onClose,
@@ -36,6 +40,16 @@ export default function Sidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto sidebar-scroll p-4 space-y-5">
+        {loading && (
+          <p role="status" className="text-xs text-gray-500">
+            Loading flood risk and reports…
+          </p>
+        )}
+        {loadError && (
+          <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2">
+            {loadError}
+          </p>
+        )}
         {risk && <RiskCard risk={risk} />}
         {risk && <TipsList tips={risk.tips} />}
 
@@ -45,7 +59,7 @@ export default function Sidebar({
 
         <hr className="border-gray-100" />
 
-        <ReportList reports={reports} />
+        {!loading && <ReportList reports={reports} />}
       </div>
     </aside>
   );
