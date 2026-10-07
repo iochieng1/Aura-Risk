@@ -31,6 +31,9 @@ export interface ReportPhoto {
   large_url: string;
 }
 
+/** Moderation status. Public listings show pending and verified reports. */
+export type ModerationStatus = 'pending' | 'verified' | 'rejected';
+
 export interface CommunityReport {
   id: string;
   location: Location;
@@ -39,6 +42,15 @@ export interface CommunityReport {
   /** RFC 3339 creation time. */
   timestamp: string;
   photos?: ReportPhoto[];
+  /** Absent from older servers; treat as pending (unverified). */
+  status?: ModerationStatus;
+  /** Independent nearby reports of the same kind of problem. */
+  corroborations?: number;
+  /**
+   * Only on POST /api/reports: the earlier report this one repeats. Duplicates
+   * are hidden from listings; show the original instead.
+   */
+  duplicate_of?: string;
 }
 
 /** Body of POST /api/reports. */

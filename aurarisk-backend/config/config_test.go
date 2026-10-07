@@ -191,3 +191,40 @@ func TestEnvironmentRejectsUnknown(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestModeratorTokens(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("MODERATOR_TOKENS", " alice:tok-a , bob:tok-b")
+	got, err := ModeratorTokens()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got["alice"] != "tok-a" || got["bob"] != "tok-b" {
+		t.Fatalf("ModeratorTokens = %v", got)
+	}
+
+	for _, bad := range []string{"alice", "alice:", ":tok", "alice:a,alice:b", "alice:same,bob:same", "auto:tok"} {
+		t.Setenv("MODERATOR_TOKENS", bad)
+		if _, err := ModeratorTokens(); err == nil {
+			t.Errorf("MODERATOR_TOKENS=%q: expected error", bad)
+		}
+	}
+}
+
+func TestValidateProductionRequiresLongModeratorTokens(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("NOTIFIER_INTERVAL", "0")
+	t.Setenv("DATABASE_URL", "postgres://app:s3cr3t-Value@db:5432/aurarisk?sslmode=require")
+	t.Setenv("MODERATOR_TOKENS", "alice:short")
+
+	err := Validate()
+	if err == nil || !strings.Contains(err.Error(), `token for "alice" must be at least 32 characters`) {
+		t.Fatalf("Validate() = %v", err)
+	}
+
+	t.Setenv("MODERATOR_TOKENS", "alice:"+strings.Repeat("x", 32))
+	if err := Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

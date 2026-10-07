@@ -39,6 +39,7 @@ func Connect() *sql.DB {
 }
 
 func Migrate(db *sql.DB) {
+	// Bump schemaVersion below whenever this SQL changes.
 	migration := `
 	CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -119,14 +120,85 @@ func Migrate(db *sql.DB) {
 	);
 	CREATE INDEX IF NOT EXISTS idx_report_photos_report ON report_photos(report_id);
 	CREATE INDEX IF NOT EXISTS idx_report_photos_processing ON report_photos(updated_at) WHERE status = 'processing';
+
+	ALTER TABLE community_reports
+		ADD COLUMN IF NOT EXISTS moderation_status TEXT NOT NULL DEFAULT 'pending'
+			CHECK (moderation_status IN ('pending', 'verified', 'rejected')),
+		ADD COLUMN IF NOT EXISTS duplicate_of UUID REFERENCES community_reports(id) ON DELETE CASCADE,
+		ADD COLUMN IF NOT EXISTS verification_score SMALLINT NOT NULL DEFAULT 0,
+		ADD COLUMN IF NOT EXISTS corroboration_count INT NOT NULL DEFAULT 0,
+		ADD COLUMN IF NOT EXISTS moderated_by TEXT,
+		ADD COLUMN IF NOT EXISTS moderation_reason TEXT,
+		ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+	CREATE INDEX IF NOT EXISTS idx_reports_status_created ON community_reports(moderation_status, created_at);
+	CREATE INDEX IF NOT EXISTS idx_reports_created ON community_reports(created_at);
+	CREATE INDEX IF NOT EXISTS idx_reports_account ON community_reports(account_id) WHERE account_id IS NOT NULL;
+	CREATE INDEX IF NOT EXISTS idx_reports_duplicate_of ON community_reports(duplicate_of) WHERE duplicate_of IS NOT NULL;
+
+	CREATE TABLE IF NOT EXISTS report_moderation_events (
+		id BIGSERIAL PRIMARY KEY,
+		report_id UUID NOT NULL REFERENCES community_reports(id) ON DELETE CASCADE,
+		from_status TEXT NOT NULL,
+		to_status TEXT NOT NULL,
+		actor TEXT NOT NULL,
+		reason TEXT,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	CREATE INDEX IF NOT EXISTS idx_moderation_events_report ON report_moderation_events(report_id);
+
+	CREATE INDEX IF NOT EXISTS idx_report_photos_status_updated ON report_photos(status, updated_at);
 `
 
-	_, err := db.Exec(migration)
-	if err != nil {
+	if err := runLocked(db, migration); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	log.Println("✅ Migrations complete")
+}
+
+const (
+	// schemaVersion must be bumped whenever the migration SQL above changes,
+	// or databases already at the old version will not pick up the change.
+	schemaVersion = 3
+	// migrationLockID is an arbitrary constant identifying the migration lock.
+	migrationLockID = 7_311_000
+)
+
+// runLocked applies the migration in one transaction under an advisory lock,
+// so instances starting together do not race on CREATE ... IF NOT EXISTS.
+// A database already at schemaVersion is left alone: the ALTER TABLE
+// statements take exclusive table locks even when they change nothing, which
+// would block live traffic on every startup.
+func runLocked(db *sql.DB, migration string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock($1)`, migrationLockID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INT NOT NULL)`); err != nil {
+		return err
+	}
+	var current int
+	if err := tx.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_version`).Scan(&current); err != nil {
+		return err
+	}
+	if current >= schemaVersion {
+		return tx.Commit()
+	}
+	if _, err := tx.Exec(migration); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM schema_version`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO schema_version (version) VALUES ($1)`, schemaVersion); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func HealthCheck() error {

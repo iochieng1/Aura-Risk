@@ -268,3 +268,31 @@ groups:
         annotations:
           summary: "The photo processor has not drained its queue in {{ $value | humanizeDuration }}"
           runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskphotoproviderfailing"
+
+  - name: aurarisk-report-curation
+    rules:
+      - alert: AuraRiskReportCurationStalled
+        expr: |
+          (time() - max by (worker) (aurarisk_worker_last_success_timestamp_seconds{worker=~"report_verifier|retention"}))
+          > 3 * max by (worker) (aurarisk_worker_interval_seconds{worker=~"report_verifier|retention"})
+        for: 15m
+        labels:
+          severity: ticket
+          team: backend
+          component: reports
+        annotations:
+          summary: "The {{ $labels.worker }} worker has not completed a run in {{ $value | humanizeDuration }}"
+          description: "Reports are not being auto-verified, or expired data is not being deleted on schedule."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskreportcuration"
+
+      - alert: AuraRiskModerationBacklog
+        expr: max(aurarisk_moderation_queue_reports) > 200
+        for: 6h
+        labels:
+          severity: ticket
+          team: backend
+          component: reports
+        annotations:
+          summary: "{{ $value }} reports are waiting for verification"
+          description: "The pending queue has stayed above 200 for 6 hours. Moderators are behind or the verifier is not keeping up."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskreportcuration"

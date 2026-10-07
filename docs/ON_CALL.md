@@ -13,6 +13,8 @@ headings in sync with `observability/prometheus/alerts.yml`.
 | Weather data | `weather` | Backend team | Open-Meteo availability and data freshness |
 | Push alerts | `push` | Backend team | Risk notifier and Expo push delivery |
 | Photos | `photos` | Backend team | S3 object storage, ClamAV scanning, photo processor |
+| Report curation | `reports` | Backend team | Duplicate detection, automatic verification, retention cleanup |
+| Report moderation decisions | — | Moderators (`MODERATOR_TOKENS`) | Reviewing the pending queue; not paged |
 | Mobile and web clients | — | Mobile/web team | Client crashes and releases (not paged from these alerts) |
 
 **Service owner:** @iochieng1. The service owner keeps the rotation staffed,
@@ -112,7 +114,9 @@ In production:
 | `aurarisk_provider_last_success_timestamp_seconds{provider}` | Last successful call per provider |
 | `aurarisk_weather_observation_age_seconds` | Age of Open-Meteo's current conditions when fetched |
 | `aurarisk_push_tickets_total{status}` | Per-message Expo results: `ok`, `device_gone`, `error` |
-| `aurarisk_worker_last_success_timestamp_seconds{worker}` | Last successful notifier / photo processor run |
+| `aurarisk_worker_last_success_timestamp_seconds{worker}` | Last successful notifier / photo processor / report verifier / retention run |
+| `aurarisk_moderation_queue_reports` | Pending reports awaiting verification or review |
+| `aurarisk_retention_deleted_total{kind,reason}` | Rows removed by the retention policy |
 
 ## Runbooks
 
@@ -261,3 +265,21 @@ marks the photo failed; reports themselves are unaffected.
 2. S3: check credentials, bucket permissions, and the provider's status page.
 3. Processor stalled: the backend cannot read the photo queue. Check database
    health and the processor's logs (`❌ Photo claim failed`).
+
+### AuraRiskReportCuration
+
+Covers `AuraRiskReportCurationStalled` (the report verifier or retention worker
+has not completed a run in 3× its interval) and `AuraRiskModerationBacklog`
+(more than 200 pending reports for 6 hours). See
+[REPORT_CURATION.md](REPORT_CURATION.md) for how both work.
+
+1. Stalled worker: backend logs show `❌ Report verification failed` or
+   `❌ Retention cleanup failed` with the cause, usually the database. Check
+   that `REPORT_VERIFIER_INTERVAL` / `RETENTION_INTERVAL` are not `0`.
+2. Retention running but not deleting: `⚠️ Retention could not delete object`
+   means object storage is failing; see
+   [AuraRiskPhotoProviderFailing](#aurariskphotoproviderfailing). Reports are
+   kept until their photos can be removed, so nothing is orphaned.
+3. Backlog: tell the moderators. A sudden jump with many similar notes is
+   likely spam; reject a sample and check whether the duplicate rules caught
+   the rest (`GET /api/moderation/reports?duplicates=only`).

@@ -74,7 +74,17 @@ func Validate() error {
 		problems = append(problems, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set together")
 	}
 
+	moderators, err := ModeratorTokens()
+	if err != nil {
+		problems = append(problems, err.Error())
+	}
+
 	if IsProduction() {
+		for name, token := range moderators {
+			if len(token) < minModeratorTokenLength {
+				problems = append(problems, fmt.Sprintf("MODERATOR_TOKENS: token for %q must be at least %d characters", name, minModeratorTokenLength))
+			}
+		}
 		if dsn != "" && isDevSecret(dsnPassword(dsn)) {
 			problems = append(problems, "DATABASE_URL uses a development password")
 		}
@@ -159,4 +169,37 @@ func GetInt(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+const minModeratorTokenLength = 32
+
+// ModeratorTokens parses MODERATOR_TOKENS ("name:token,name:token") into a
+// map of moderator name to token. Names are recorded in the moderation audit
+// trail. An empty value disables the moderation API.
+func ModeratorTokens() (map[string]string, error) {
+	raw := strings.TrimSpace(GetEnv("MODERATOR_TOKENS", ""))
+	tokens := map[string]string{}
+	if raw == "" {
+		return tokens, nil
+	}
+	seen := map[string]bool{}
+	for _, entry := range strings.Split(raw, ",") {
+		name, token, ok := strings.Cut(strings.TrimSpace(entry), ":")
+		name, token = strings.TrimSpace(name), strings.TrimSpace(token)
+		if !ok || name == "" || token == "" {
+			return nil, errors.New(`MODERATOR_TOKENS must be a comma-separated list of "name:token"`)
+		}
+		if name == "auto" {
+			return nil, errors.New(`MODERATOR_TOKENS: "auto" is reserved for automatic verification`)
+		}
+		if _, dup := tokens[name]; dup {
+			return nil, fmt.Errorf("MODERATOR_TOKENS: moderator %q is listed twice", name)
+		}
+		if seen[token] {
+			return nil, errors.New("MODERATOR_TOKENS: two moderators share a token")
+		}
+		seen[token] = true
+		tokens[name] = token
+	}
+	return tokens, nil
 }

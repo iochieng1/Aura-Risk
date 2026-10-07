@@ -89,6 +89,21 @@ var (
 		Help: "Unix time of each worker's last successful run.",
 	}, []string{"worker"})
 
+	moderationQueue = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "aurarisk_moderation_queue_reports",
+		Help: "Pending, non-duplicate reports awaiting verification or review.",
+	})
+
+	reportsVerified = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "aurarisk_reports_auto_verified_total",
+		Help: "Reports verified automatically by the verification algorithm.",
+	})
+
+	retentionDeleted = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "aurarisk_retention_deleted_total",
+		Help: "Rows removed by the retention worker, by kind and reason.",
+	}, []string{"kind", "reason"})
+
 	workerInterval = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "aurarisk_worker_interval_seconds",
 		Help: "Configured run interval of each worker.",
@@ -171,5 +186,20 @@ func ObserveWorkerRun(worker string, err error) {
 	if err == nil {
 		workerRuns.WithLabelValues(worker, outcomeSuccess).Inc()
 		workerLastSuccess.WithLabelValues(worker).SetToCurrentTime()
+	}
+}
+
+func SetModerationQueue(n int) {
+	moderationQueue.Set(float64(n))
+}
+
+func AddReportsAutoVerified(n int) {
+	reportsVerified.Add(float64(n))
+}
+
+// AddRetentionDeleted counts rows removed by retention, e.g. ("report", "rejected").
+func AddRetentionDeleted(kind, reason string, n int) {
+	if n > 0 {
+		retentionDeleted.WithLabelValues(kind, reason).Add(float64(n))
 	}
 }

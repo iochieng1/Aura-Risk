@@ -23,6 +23,35 @@ type CommunityReport struct {
 	Note      string        `json:"note"`
 	Timestamp time.Time     `json:"timestamp"`
 	Photos    []ReportPhoto `json:"photos"`
+	// Status is the moderation status: pending, verified, or rejected.
+	Status string `json:"status"`
+	// Corroborations counts independent nearby reports of the same problem.
+	Corroborations int `json:"corroborations"`
+	// DuplicateOf is set when this report repeats an earlier one. Duplicates
+	// are hidden from public listings.
+	DuplicateOf *string `json:"duplicate_of,omitempty"`
+}
+
+// ModerationReport is a report as moderators see it.
+type ModerationReport struct {
+	CommunityReport
+	DuplicateOf       *string   `json:"duplicate_of"`
+	VerificationScore int       `json:"verification_score"`
+	AccountID         *string   `json:"account_id"`
+	ModeratedBy       *string   `json:"moderated_by"`
+	ModerationReason  *string   `json:"moderation_reason"`
+	StatusUpdatedAt   time.Time `json:"status_updated_at"`
+	// The reporter's other reports as decided by human moderators.
+	ReporterVerified int `json:"reporter_verified"`
+	ReporterRejected int `json:"reporter_rejected"`
+}
+
+type ModerationEvent struct {
+	FromStatus string    `json:"from_status"`
+	ToStatus   string    `json:"to_status"`
+	Actor      string    `json:"actor"`
+	Reason     *string   `json:"reason"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type ReportPhoto struct {
