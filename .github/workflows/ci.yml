@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aurarisk-backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: aurarisk_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d aurarisk_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Enables the Postgres integration tests (notifier, curation, moderation).
+      TEST_DATABASE_URL: postgres://postgres:ci-only-password@localhost:5432/aurarisk_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: aurarisk-backend/go.mod
+          cache-dependency-path: aurarisk-backend/go.sum
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Run gofmt -w on:"; echo "$unformatted"; exit 1
+          fi
+      - name: Check go.mod is tidy
+        run: go mod tidy && git diff --exit-code go.mod go.sum
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test -race -count=1 ./...
+
+  mobile:
+    name: Mobile and shared package
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aurarisk-mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: aurarisk-mobile/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      # Also runs packages/shared tests.
+      - run: npx jest --ci
+
+  frontend:
+    name: Web frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aurarisk-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: aurarisk-frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      # Typechecks (tsc -b) and builds.
+      - run: npm run build
+
+  observability:
+    name: Alert rules and monitoring config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate and test Prometheus rules
+        run: |
+          docker run --rm -v "$PWD/observability/prometheus:/etc/prometheus:ro" --entrypoint promtool \
+            prom/prometheus:v3.5.0 check config /etc/prometheus/prometheus.yml
+          docker run --rm -v "$PWD/observability/prometheus:/p:ro" --entrypoint promtool \
+            prom/prometheus:v3.5.0 test rules /p/alerts_test.yml
+      - name: Validate Alertmanager config
+        run: |
+          docker run --rm -v "$PWD/observability/alertmanager:/etc/alertmanager:ro" --entrypoint amtool \
+            prom/alertmanager:v0.28.1 check-config /etc/alertmanager/alertmanager.yml
+      - name: Validate dashboard JSON
+        run: python3 -m json.tool observability/grafana/dashboards/aurarisk-overview.json > /dev/null
+
+  dependencies:
+    name: Dependency vulnerabilities (report only)
+    runs-on: ubuntu-latest
+    # Not blocking yet: the backend targets Go 1.22, which no longer gets
+    # security fixes, so this reports known issues until Go and the affected
+    # modules are upgraded. Make it blocking once it passes.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: aurarisk-backend/go.mod
+          cache-dependency-path: aurarisk-backend/go.sum
+      - name: govulncheck
+        working-directory: aurarisk-backend
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.3 ./...

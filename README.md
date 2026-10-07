@@ -83,3 +83,9 @@ The backend was verified to build and run successfully with the database availab
 - `packages/shared/`: API types, client, and validation used by both. See [its README](packages/shared/README.md).
 
 The mobile app picks a location from the device's GPS when the user allows it. If permission is denied, blocked, or location services are off, the user can still search for a place or type coordinates.
+
+## Contributing
+
+- Every pull request runs CI (`.github/workflows/ci.yml`): Go formatting, vet, and tests (including Postgres integration tests), the mobile typecheck and tests (which cover `packages/shared`), the web build, and the monitoring config checks.
+- Link each PR to its issue. `Closes #N` closes the issue on merge; use `Part of #N` when only some deliverables are done. The PR template has a checklist for this.
+- Close issues through PRs rather than by hand, so every closed issue points at the code that implemented it.
