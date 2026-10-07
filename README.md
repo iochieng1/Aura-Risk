@@ -55,6 +55,7 @@ Expected response:
 - GET `/api/risk?lat=...&lon=...` — flood risk assessment
 - GET `/api/reports?lat=...&lon=...` — nearby community reports
 - POST `/api/reports` — create a new report
+- Report moderation, duplicate detection, automatic verification, and retention — see [docs/REPORT_CURATION.md](docs/REPORT_CURATION.md)
 - Device accounts, push consent, location subscriptions, and photo uploads — see [docs/MOBILE_PHASE3.md](docs/MOBILE_PHASE3.md)
 
 ### Monitoring and on-call

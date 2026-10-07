@@ -47,6 +47,15 @@ func main() {
 
 	handlers.SetDatabase(db)
 
+	moderators, err := config.ModeratorTokens()
+	if err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
+	handlers.SetModerators(moderators)
+	if len(moderators) == 0 {
+		log.Println("⚠️ MODERATOR_TOKENS is not set: the moderation API is disabled")
+	}
+
 	var store storage.ObjectStore
 	if bucket := config.GetEnv("S3_BUCKET", ""); bucket != "" {
 		s3Store, err := storage.NewS3Store(ctx, storage.S3Config{
@@ -83,6 +92,25 @@ func main() {
 		}
 		go notifier.Run(ctx)
 		log.Printf("✅ Risk notifier running every %s", interval)
+	}
+
+	if interval := config.GetDuration("REPORT_VERIFIER_INTERVAL", 2*time.Minute); interval > 0 {
+		go (&workers.ReportVerifier{DB: db, Interval: interval}).Run(ctx)
+		log.Printf("✅ Report verifier running every %s", interval)
+	}
+
+	if interval := config.GetDuration("RETENTION_INTERVAL", time.Hour); interval > 0 {
+		policy := workers.DefaultRetentionPolicy()
+		days := func(key string, fallback time.Duration) time.Duration {
+			return time.Duration(config.GetInt(key, int(fallback/(24*time.Hour)))) * 24 * time.Hour
+		}
+		policy.Rejected = days("RETENTION_REJECTED_DAYS", policy.Rejected)
+		policy.Duplicate = days("RETENTION_DUPLICATE_DAYS", policy.Duplicate)
+		policy.Pending = days("RETENTION_PENDING_DAYS", policy.Pending)
+		policy.Verified = days("RETENTION_VERIFIED_DAYS", policy.Verified)
+		policy.FailedPhoto = days("RETENTION_FAILED_PHOTO_DAYS", policy.FailedPhoto)
+		go (&workers.RetentionCleaner{DB: db, Store: store, Policy: policy, Interval: interval}).Run(ctx)
+		log.Printf("✅ Retention cleanup running every %s", interval)
 	}
 
 	r := gin.Default()
@@ -130,6 +158,13 @@ func main() {
 			authed.POST("/reports/:id/photos", handlers.CreatePhotoUpload)
 			authed.POST("/photos/:id/complete", handlers.CompletePhotoUpload)
 			authed.GET("/photos/:id", handlers.GetPhoto)
+		}
+
+		moderation := api.Group("/moderation", handlers.RequireModerator())
+		{
+			moderation.GET("/reports", handlers.ListModerationQueue)
+			moderation.POST("/reports/:id", handlers.ModerateReport)
+			moderation.GET("/reports/:id/events", handlers.ListModerationEvents)
 		}
 	}
 

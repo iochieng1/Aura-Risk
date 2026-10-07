@@ -117,7 +117,7 @@ The app is suitable for a development demo or pilot, but it should not yet be us
 - Expose data freshness in the UI. Provider response age is now tracked as `aurarisk_weather_observation_age_seconds`.
 - Return confidence, source timestamps, and model version with risk assessments.
 - Use PostGIS or a geospatial index for accurate radius searches instead of a latitude/longitude bounding box.
-- Add report verification, duplicate detection, moderation status, and retention policies.
+- ~~Add report verification, duplicate detection, moderation status, and retention policies.~~ Done: see [REPORT_CURATION.md](REPORT_CURATION.md).
 - Add accessible loading, empty, error, and offline states in the frontend.
 - ~~Add monitoring alerts for API latency, provider failures, database saturation, and stale weather data.~~ Done: dashboards, alert rules, routing, and on-call ownership are in `observability/` and [ON_CALL.md](ON_CALL.md).
 

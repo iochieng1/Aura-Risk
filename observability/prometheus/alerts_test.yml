@@ -118,3 +118,27 @@ tests:
             exp_annotations:
               summary: "Every notifier run in the last hour failed"
               runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurarisknotifierstalled"
+
+  - name: Stalled retention worker opens a ticket
+    interval: 1m
+    input_series:
+      - series: 'aurarisk_worker_last_success_timestamp_seconds{worker="retention",instance="api-1"}'
+        values: '0x300'
+      - series: 'aurarisk_worker_interval_seconds{worker="retention",instance="api-1"}'
+        values: '3600x300'
+    alert_rule_test:
+      - eval_time: 2h
+        alertname: AuraRiskReportCurationStalled
+        exp_alerts: []
+      - eval_time: 3h30m
+        alertname: AuraRiskReportCurationStalled
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              team: backend
+              component: reports
+              worker: retention
+            exp_annotations:
+              summary: "The retention worker has not completed a run in 3h 30m 0s"
+              description: "Reports are not being auto-verified, or expired data is not being deleted on schedule."
+              runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskreportcuration"
