@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"aurarisk-backend/internal/metrics"
 	"aurarisk-backend/internal/models"
 	"aurarisk-backend/internal/services"
 )
@@ -93,11 +94,14 @@ func (n *Notifier) now() time.Time {
 }
 
 func (n *Notifier) Run(ctx context.Context) {
+	metrics.SetWorkerInterval("notifier", n.Interval)
 	ticker := time.NewTicker(n.Interval)
 	defer ticker.Stop()
 
 	for {
-		if err := n.RunOnce(ctx); err != nil {
+		err := n.RunOnce(ctx)
+		metrics.ObserveWorkerRun("notifier", err)
+		if err != nil {
 			log.Printf("❌ Notifier run failed: %v", err)
 		}
 		select {
@@ -243,14 +247,17 @@ func (n *Notifier) notify(ctx context.Context, sub notifierSubscription, assessm
 	for i, ticket := range tickets {
 		switch {
 		case ticket.Status == "ok":
+			metrics.ObservePushTicket("ok")
 			delivered = true
 		case ticket.DeviceGone():
+			metrics.ObservePushTicket("device_gone")
 			if _, err := n.DB.ExecContext(ctx, `
 				UPDATE devices SET push_token = NULL, push_consented_at = NULL WHERE id = $1
 			`, deviceIDs[i]); err != nil {
 				log.Printf("⚠️ Failed to clear stale push token for device %s: %v", deviceIDs[i], err)
 			}
 		default:
+			metrics.ObservePushTicket("error")
 			log.Printf("⚠️ Push to device %s failed: %s %s", deviceIDs[i], ticket.Details.Error, ticket.Message)
 		}
 	}

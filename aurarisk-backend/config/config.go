@@ -147,3 +147,16 @@ func GetDuration(key string, fallback time.Duration) time.Duration {
 	}
 	return parsed
 }
+
+func GetInt(key string, fallback int) int {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		log.Printf("Invalid integer for %s=%q, using %d", key, value, fallback)
+		return fallback
+	}
+	return parsed
+}

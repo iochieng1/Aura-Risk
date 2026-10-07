@@ -1,0 +1,29 @@
+# Local monitoring stack: docker compose --profile monitoring up -d
+# In production, point the backend target at each instance's METRICS_ADDR on
+# the private network; the rule and Alertmanager files apply unchanged.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  # The backend runs on the host during development (go run .), so it must
+  # listen where containers can reach it: METRICS_ADDR=:9464 in .env.
+  - job_name: aurarisk-backend
+    static_configs:
+      - targets: ["host.docker.internal:9464"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

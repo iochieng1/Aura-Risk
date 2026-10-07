@@ -67,7 +67,77 @@ services:
       start_period: 180s
       retries: 5
 
+  # --- Monitoring (opt-in): docker compose --profile monitoring up -d ---
+  # Dashboards, alert rules, and routing live in observability/. The backend
+  # runs on the host, so set METRICS_ADDR=:9464 in .env for Prometheus to reach it.
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - aurarisk_prometheus:/prometheus
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      # Mounted as a directory so a missing secrets/ folder is not an error.
+      - ./observability/alertmanager:/etc/alertmanager:ro
+      - aurarisk_alertmanager:/alertmanager
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_URI: postgres:5432/${POSTGRES_DB:-aurarisk}?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_USER:-postgres}
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+  # Local only: anonymous editor access on 127.0.0.1 with the login form off,
+  # so there is no default admin password. Production Grafana is configured
+  # separately (see docs/ON_CALL.md).
+  grafana:
+    image: grafana/grafana:13.2.3
+    profiles: [monitoring]
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Editor
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/aurarisk-overview.json
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - aurarisk_grafana:/var/lib/grafana
+
 volumes:
   aurarisk_pgdata:
   aurarisk_objects:
   aurarisk_clamdb:
+  aurarisk_prometheus:
+  aurarisk_alertmanager:
+  aurarisk_grafana:

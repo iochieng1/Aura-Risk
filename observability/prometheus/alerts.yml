@@ -1,0 +1,270 @@
+# Alert rules for AuraRisk. Labels drive routing and ownership:
+#   severity: page   -> wakes the primary on-call (see docs/ON_CALL.md)
+#   severity: ticket -> posted to the alerts channel, handled in working hours
+#   team / component -> who owns the follow-up
+# Every alert links to its runbook section in docs/ON_CALL.md.
+groups:
+  - name: aurarisk-api
+    rules:
+      - alert: AuraRiskBackendDown
+        expr: up{job="aurarisk-backend"} == 0
+        for: 2m
+        labels:
+          severity: page
+          team: backend
+          component: api
+        annotations:
+          summary: "Backend {{ $labels.instance }} is not responding to scrapes"
+          description: "Prometheus has failed to scrape {{ $labels.instance }} for 2 minutes. The API and the alert notifier on it are likely down."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskbackenddown"
+
+      - alert: AuraRiskHighErrorRate
+        expr: |
+          (
+            sum(rate(aurarisk_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(aurarisk_http_requests_total[5m]))
+          ) > 0.05
+          and sum(increase(aurarisk_http_requests_total[5m])) >= 20
+        for: 10m
+        labels:
+          severity: page
+          team: backend
+          component: api
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of API requests are failing with 5xx"
+          description: "More than 5% of API requests returned a server error for 10 minutes."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskhigherrorrate"
+
+      - alert: AuraRiskRiskEndpointSlow
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(aurarisk_http_request_duration_seconds_bucket{route="/api/risk"}[5m]))
+          ) > 4
+          and sum(rate(aurarisk_http_request_duration_seconds_count{route="/api/risk"}[5m])) > 0.05
+        for: 15m
+        labels:
+          severity: ticket
+          team: backend
+          component: api
+        annotations:
+          summary: "/api/risk p95 latency is {{ $value | humanizeDuration }}"
+          description: "Risk lookups wait on Open-Meteo. Check provider latency before the API itself."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskapilatency"
+
+      - alert: AuraRiskApiSlow
+        expr: |
+          histogram_quantile(0.95,
+            sum by (route, le) (rate(aurarisk_http_request_duration_seconds_bucket{route!~"/api/risk|unmatched"}[5m]))
+          ) > 1
+          and sum by (route) (rate(aurarisk_http_request_duration_seconds_count{route!~"/api/risk|unmatched"}[5m])) > 0.05
+        for: 15m
+        labels:
+          severity: ticket
+          team: backend
+          component: api
+        annotations:
+          summary: "{{ $labels.route }} p95 latency is {{ $value | humanizeDuration }}"
+          description: "Routes other than /api/risk only touch Postgres and object storage. Check DB pool saturation first."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskapilatency"
+
+  - name: aurarisk-database
+    rules:
+      - alert: AuraRiskDbPoolSaturated
+        expr: |
+          max by (instance) (
+            go_sql_in_use_connections{job="aurarisk-backend"}
+            / go_sql_max_open_connections{job="aurarisk-backend"}
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: ticket
+          team: backend
+          component: database
+        annotations:
+          summary: "{{ $labels.instance }} is using {{ $value | humanizePercentage }} of its DB pool"
+          description: "Sustained use above 80% of DB_MAX_OPEN_CONNS. Requests will start queueing for connections."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskdbpoolsaturated"
+
+      - alert: AuraRiskDbPoolWaiting
+        # Seconds spent waiting per second = average number of requests blocked on the pool.
+        expr: sum by (instance) (rate(go_sql_wait_duration_seconds_total{job="aurarisk-backend"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: page
+          team: backend
+          component: database
+        annotations:
+          summary: "{{ $labels.instance }}: requests are blocked waiting for DB connections"
+          description: "On average {{ $value | printf \"%.2f\" }} requests are waiting for a pooled connection. The pool is exhausted."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskdbpoolsaturated"
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 2m
+        labels:
+          severity: page
+          team: backend
+          component: database
+        annotations:
+          summary: "postgres-exporter cannot reach Postgres"
+          description: "pg_up has been 0 for 2 minutes."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#postgresdown"
+
+      - alert: PostgresConnectionsNearLimit
+        expr: |
+          sum by (instance) (pg_stat_database_numbackends)
+          / max by (instance) (pg_settings_max_connections) > 0.8
+        for: 10m
+        labels:
+          severity: page
+          team: backend
+          component: database
+        annotations:
+          summary: "Postgres is at {{ $value | humanizePercentage }} of max_connections"
+          description: "New connections, including from new backend instances, will soon be refused."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#postgresconnectionsnearlimit"
+
+  - name: aurarisk-providers
+    rules:
+      - alert: AuraRiskWeatherProviderFailing
+        expr: |
+          (
+            sum(rate(aurarisk_provider_requests_total{provider="open_meteo",outcome="error"}[10m]))
+            / sum(rate(aurarisk_provider_requests_total{provider="open_meteo"}[10m]))
+          ) > 0.25
+          and sum(increase(aurarisk_provider_requests_total{provider="open_meteo"}[10m])) >= 5
+        for: 5m
+        labels:
+          severity: page
+          team: backend
+          component: weather
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of Open-Meteo calls are failing"
+          description: "Risk lookups return 500 and the notifier cannot assess subscriptions while Open-Meteo fails."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskweatherproviderfailing"
+
+      - alert: AuraRiskPushProviderFailing
+        expr: |
+          (
+            sum(rate(aurarisk_provider_requests_total{provider="expo_push",outcome="error"}[15m]))
+            / sum(rate(aurarisk_provider_requests_total{provider="expo_push"}[15m]))
+          ) > 0.25
+          and sum(increase(aurarisk_provider_requests_total{provider="expo_push"}[15m])) >= 3
+        for: 5m
+        labels:
+          severity: page
+          team: backend
+          component: push
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of Expo push requests are failing"
+          description: "Flood alerts are not reaching devices. Undelivered alerts are retried on the next notifier run."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskpushproviderfailing"
+
+      - alert: AuraRiskPushTicketErrors
+        expr: |
+          (
+            sum(rate(aurarisk_push_tickets_total{status="error"}[30m]))
+            / sum(rate(aurarisk_push_tickets_total[30m]))
+          ) > 0.2
+          and sum(increase(aurarisk_push_tickets_total[30m])) >= 10
+        for: 15m
+        labels:
+          severity: ticket
+          team: backend
+          component: push
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of push tickets were rejected by Expo"
+          description: "Expo accepted the requests but rejected individual messages (credentials, payload, or rate limits)."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskpushproviderfailing"
+
+      - alert: AuraRiskPhotoProviderFailing
+        expr: |
+          (
+            sum by (provider) (rate(aurarisk_provider_requests_total{provider=~"s3|clamav",outcome="error"}[15m]))
+            / sum by (provider) (rate(aurarisk_provider_requests_total{provider=~"s3|clamav"}[15m]))
+          ) > 0.5
+          and sum by (provider) (increase(aurarisk_provider_requests_total{provider=~"s3|clamav"}[15m])) >= 3
+        for: 10m
+        labels:
+          severity: ticket
+          team: backend
+          component: photos
+        annotations:
+          summary: "{{ $labels.provider }} is failing {{ $value | humanizePercentage }} of calls"
+          description: "Photo processing is retrying; uploaded photos stay unpublished until it recovers."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskphotoproviderfailing"
+
+  - name: aurarisk-weather-freshness
+    rules:
+      - alert: AuraRiskWeatherDataStale
+        # Only while something is asking for weather; an idle dev server is not stale.
+        expr: |
+          (time() - max(aurarisk_provider_last_success_timestamp_seconds{provider="open_meteo"})) > 1800
+          and on() sum(increase(aurarisk_provider_requests_total{provider="open_meteo"}[30m])) > 0
+        for: 5m
+        labels:
+          severity: page
+          team: backend
+          component: weather
+        annotations:
+          summary: "No successful weather fetch for {{ $value | humanizeDuration }}"
+          description: "Weather is being requested but every call fails, so /api/risk returns errors and the notifier cannot evaluate subscriptions."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskweatherdatastale"
+
+      - alert: AuraRiskWeatherObservationsOld
+        expr: |
+          histogram_quantile(0.5,
+            sum by (le) (rate(aurarisk_weather_observation_age_seconds_bucket[30m]))
+          ) > 7200
+        for: 30m
+        labels:
+          severity: ticket
+          team: backend
+          component: weather
+        annotations:
+          summary: "Open-Meteo current conditions are {{ $value | humanizeDuration }} old"
+          description: "Calls succeed but the provider is serving old observations, so scores lag real conditions."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskweatherdatastale"
+
+  - name: aurarisk-workers
+    rules:
+      - alert: AuraRiskNotifierStalled
+        expr: |
+          (time() - max(aurarisk_worker_last_success_timestamp_seconds{worker="notifier"}))
+          > 3 * max(aurarisk_worker_interval_seconds{worker="notifier"})
+        for: 5m
+        labels:
+          severity: page
+          team: backend
+          component: push
+        annotations:
+          summary: "The risk notifier has not completed a run in {{ $value | humanizeDuration }}"
+          description: "Subscribers are not being evaluated, so no flood alerts are being sent."
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurarisknotifierstalled"
+
+      - alert: AuraRiskNotifierFailing
+        # Catches a notifier that has failed every run since startup (no last-success series yet).
+        expr: |
+          sum(increase(aurarisk_worker_runs_total{worker="notifier",outcome="error"}[1h])) >= 2
+          unless sum(increase(aurarisk_worker_runs_total{worker="notifier",outcome="success"}[1h])) > 0
+        for: 5m
+        labels:
+          severity: page
+          team: backend
+          component: push
+        annotations:
+          summary: "Every notifier run in the last hour failed"
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurarisknotifierstalled"
+
+      - alert: AuraRiskPhotoProcessorStalled
+        expr: |
+          (time() - max(aurarisk_worker_last_success_timestamp_seconds{worker="photo_processor"}))
+          > 10 * max(aurarisk_worker_interval_seconds{worker="photo_processor"}) + 600
+        for: 10m
+        labels:
+          severity: ticket
+          team: backend
+          component: photos
+        annotations:
+          summary: "The photo processor has not drained its queue in {{ $value | humanizeDuration }}"
+          runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskphotoproviderfailing"

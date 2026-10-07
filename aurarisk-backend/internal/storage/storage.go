@@ -8,6 +8,7 @@ import (
 	"io"
 	"time"
 
+	"aurarisk-backend/internal/metrics"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -118,15 +119,19 @@ func (s *S3Store) PresignGet(ctx context.Context, key string, ttl time.Duration)
 }
 
 func (s *S3Store) Get(ctx context.Context, key string, maxBytes int64) ([]byte, error) {
+	start := time.Now()
 	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})
+	var noKey *types.NoSuchKey
+	if errors.As(err, &noKey) {
+		// A missing upload is the client's problem, not the store's.
+		metrics.ObserveProvider(metrics.ProviderS3, "get", start, nil)
+		return nil, ErrNotFound
+	}
+	metrics.ObserveProvider(metrics.ProviderS3, "get", start, &err)
 	if err != nil {
-		var noKey *types.NoSuchKey
-		if errors.As(err, &noKey) {
-			return nil, ErrNotFound
-		}
 		return nil, err
 	}
 	defer out.Body.Close()
@@ -141,8 +146,9 @@ func (s *S3Store) Get(ctx context.Context, key string, maxBytes int64) ([]byte, 
 	return data, nil
 }
 
-func (s *S3Store) Put(ctx context.Context, key, contentType string, body []byte) error {
-	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+func (s *S3Store) Put(ctx context.Context, key, contentType string, body []byte) (err error) {
+	defer metrics.ObserveProvider(metrics.ProviderS3, "put", time.Now(), &err)
+	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
 		Key:           aws.String(key),
 		ContentType:   aws.String(contentType),
@@ -153,8 +159,9 @@ func (s *S3Store) Put(ctx context.Context, key, contentType string, body []byte)
 	return err
 }
 
-func (s *S3Store) Delete(ctx context.Context, key string) error {
-	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+func (s *S3Store) Delete(ctx context.Context, key string) (err error) {
+	defer metrics.ObserveProvider(metrics.ProviderS3, "delete", time.Now(), &err)
+	_, err = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})

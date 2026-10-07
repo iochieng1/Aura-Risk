@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"aurarisk-backend/internal/metrics"
 )
 
 const historicalDays = 7
 
 type OpenMeteoResponse struct {
-	Current struct {
+	UTCOffsetSeconds int `json:"utc_offset_seconds"`
+	Current          struct {
+		Time             string  `json:"time"`
 		Temperature2m    float64 `json:"temperature_2m"`
 		RelativeHumidity float64 `json:"relative_humidity_2m"`
 		Precipitation    float64 `json:"precipitation"`
@@ -25,7 +29,9 @@ type OpenMeteoResponse struct {
 	} `json:"hourly"`
 }
 
-func FetchWeatherData(lat, lon float64) (*OpenMeteoResponse, error) {
+func FetchWeatherData(lat, lon float64) (_ *OpenMeteoResponse, err error) {
+	defer metrics.ObserveProvider(metrics.ProviderOpenMeteo, "forecast", time.Now(), &err)
+
 	url := fmt.Sprintf(
 		"https://api.open-meteo.com/v1/forecast?latitude=%.6f&longitude=%.6f&past_days=%d&forecast_days=1&current=temperature_2m,relative_humidity_2m,precipitation,rain,weather_code&hourly=precipitation,rain,soil_moisture_0_to_7cm&timezone=auto",
 		lat,
@@ -49,5 +55,19 @@ func FetchWeatherData(lat, lon float64) (*OpenMeteoResponse, error) {
 		return nil, fmt.Errorf("failed to decode weather data: %w", err)
 	}
 
+	if observedAt, ok := data.ObservedAt(); ok {
+		metrics.ObserveWeatherAge(time.Since(observedAt))
+	}
+
 	return &data, nil
+}
+
+// ObservedAt returns when the current conditions were valid. Open-Meteo
+// reports local time without an offset when timezone=auto is requested.
+func (r *OpenMeteoResponse) ObservedAt() (time.Time, bool) {
+	local, err := time.Parse("2006-01-02T15:04", r.Current.Time)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return local.Add(-time.Duration(r.UTCOffsetSeconds) * time.Second), true
 }

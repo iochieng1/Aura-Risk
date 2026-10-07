@@ -10,6 +10,7 @@ import (
 	"log"
 	"time"
 
+	"aurarisk-backend/internal/metrics"
 	"aurarisk-backend/internal/services"
 	"aurarisk-backend/internal/storage"
 )
@@ -46,11 +47,12 @@ func (p *PhotoProcessor) Run(ctx context.Context) {
 		log.Println("⚠️ CLAMD_ADDR is not set: uploaded photos will stay unpublished until a malware scanner is configured")
 		return
 	}
+	metrics.SetWorkerInterval("photo_processor", p.Interval)
 	ticker := time.NewTicker(p.Interval)
 	defer ticker.Stop()
 
 	for {
-		p.drain(ctx)
+		metrics.ObserveWorkerRun("photo_processor", p.drain(ctx))
 		select {
 		case <-ctx.Done():
 			return
@@ -59,18 +61,21 @@ func (p *PhotoProcessor) Run(ctx context.Context) {
 	}
 }
 
-func (p *PhotoProcessor) drain(ctx context.Context) {
+// drain processes photos until none are claimable. It returns an error only
+// when the queue itself cannot be read; per-photo failures are retried.
+func (p *PhotoProcessor) drain(ctx context.Context) error {
 	for ctx.Err() == nil {
 		photo, err := p.claim(ctx)
 		if err != nil {
 			log.Printf("❌ Photo claim failed: %v", err)
-			return
+			return err
 		}
 		if photo == nil {
-			return
+			return nil
 		}
 		p.ProcessOne(ctx, photo)
 	}
+	return ctx.Err()
 }
 
 func (p *PhotoProcessor) claim(ctx context.Context) (*claimedPhoto, error) {
