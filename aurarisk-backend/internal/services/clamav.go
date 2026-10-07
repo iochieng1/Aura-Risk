@@ -9,6 +9,8 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"aurarisk-backend/internal/metrics"
 )
 
 const clamdChunkSize = 64 * 1024
@@ -28,7 +30,9 @@ func NewClamdScanner(addr string) *ClamdScanner {
 	return &ClamdScanner{Addr: addr, Timeout: 60 * time.Second}
 }
 
-func (s *ClamdScanner) Scan(ctx context.Context, r io.Reader) (ScanResult, error) {
+func (s *ClamdScanner) Scan(ctx context.Context, r io.Reader) (_ ScanResult, err error) {
+	defer metrics.ObserveProvider(metrics.ProviderClamAV, "scan", time.Now(), &err)
+
 	dialer := net.Dialer{Timeout: 10 * time.Second}
 	conn, err := dialer.DialContext(ctx, "tcp", s.Addr)
 	if err != nil {

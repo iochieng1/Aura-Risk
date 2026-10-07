@@ -57,6 +57,10 @@ Expected response:
 - POST `/api/reports` — create a new report
 - Device accounts, push consent, location subscriptions, and photo uploads — see [docs/MOBILE_PHASE3.md](docs/MOBILE_PHASE3.md)
 
+### Monitoring and on-call
+
+`docker compose --profile monitoring up -d` starts Prometheus, Alertmanager, Grafana (http://localhost:3000), and a Postgres exporter. Set `METRICS_ADDR=:9464` in `.env` so Prometheus can scrape the backend. Dashboards cover API latency, DB saturation, provider health, and weather data freshness. Alert rules, ownership, escalation, and runbooks are in [docs/ON_CALL.md](docs/ON_CALL.md).
+
 ### Verified status
 The backend was verified to build and run successfully with the database available. The application logs show:
 

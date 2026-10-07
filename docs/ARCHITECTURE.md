@@ -113,13 +113,13 @@ The app is suitable for a development demo or pilot, but it should not yet be us
 
 ### High-value next improvements
 
-- Add Prometheus-compatible metrics and centralized logs with correlation IDs.
-- Track provider response age and expose data freshness in the UI.
+- ~~Add Prometheus-compatible metrics.~~ Done (see [ON_CALL.md](ON_CALL.md)). Still to do: centralized logs with correlation IDs.
+- Expose data freshness in the UI. Provider response age is now tracked as `aurarisk_weather_observation_age_seconds`.
 - Return confidence, source timestamps, and model version with risk assessments.
 - Use PostGIS or a geospatial index for accurate radius searches instead of a latitude/longitude bounding box.
 - Add report verification, duplicate detection, moderation status, and retention policies.
 - Add accessible loading, empty, error, and offline states in the frontend.
-- Add monitoring alerts for API latency, provider failures, database saturation, and stale weather data.
+- ~~Add monitoring alerts for API latency, provider failures, database saturation, and stale weather data.~~ Done: dashboards, alert rules, routing, and on-call ownership are in `observability/` and [ON_CALL.md](ON_CALL.md).
 
 ## Mobile app direction
 

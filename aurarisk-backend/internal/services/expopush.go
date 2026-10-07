@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"aurarisk-backend/internal/metrics"
 )
 
 const (
@@ -80,7 +82,9 @@ func (c *ExpoPushClient) Send(ctx context.Context, messages []PushMessage) ([]Pu
 	return tickets, nil
 }
 
-func (c *ExpoPushClient) sendBatch(ctx context.Context, messages []PushMessage) ([]PushTicket, error) {
+func (c *ExpoPushClient) sendBatch(ctx context.Context, messages []PushMessage) (_ []PushTicket, err error) {
+	defer metrics.ObserveProvider(metrics.ProviderExpoPush, "send", time.Now(), &err)
+
 	payload, err := json.Marshal(messages)
 	if err != nil {
 		return nil, err

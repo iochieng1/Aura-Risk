@@ -12,6 +12,7 @@ import (
 	"aurarisk-backend/config"
 	"aurarisk-backend/internal/database"
 	"aurarisk-backend/internal/handlers"
+	"aurarisk-backend/internal/metrics"
 	"aurarisk-backend/internal/services"
 	"aurarisk-backend/internal/storage"
 	"aurarisk-backend/internal/workers"
@@ -34,6 +35,13 @@ func main() {
 
 	db := database.Connect()
 	defer db.Close()
+
+	// A bounded pool keeps load from exhausting Postgres connections and makes
+	// pool saturation measurable (see go_sql_* metrics).
+	db.SetMaxOpenConns(config.GetInt("DB_MAX_OPEN_CONNS", 25))
+	db.SetMaxIdleConns(config.GetInt("DB_MAX_IDLE_CONNS", 10))
+	db.SetConnMaxIdleTime(5 * time.Minute)
+	metrics.RegisterDB(db, "aurarisk")
 
 	database.Migrate(db)
 
@@ -78,6 +86,7 @@ func main() {
 	}
 
 	r := gin.Default()
+	r.Use(metrics.Middleware())
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "https://your-frontend.vercel.app"},
@@ -138,11 +147,29 @@ func main() {
 		}
 	}()
 
+	// Metrics get their own listener so /metrics is never exposed on the public
+	// API port. Bind it to a private interface in production.
+	var metricsServer *http.Server
+	if addr := config.GetEnv("METRICS_ADDR", "localhost:9464"); addr != "" {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", metrics.Handler())
+		metricsServer = &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+		go func() {
+			log.Printf("📈 Metrics available at http://%s/metrics", addr)
+			if err := metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalf("Metrics server failed: %v", err)
+			}
+		}()
+	}
+
 	<-ctx.Done()
 	log.Println("Shutting down...")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Graceful shutdown failed: %v", err)
+	}
+	if metricsServer != nil {
+		_ = metricsServer.Shutdown(shutdownCtx)
 	}
 }

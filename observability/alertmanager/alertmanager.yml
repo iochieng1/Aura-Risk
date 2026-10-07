@@ -1,0 +1,66 @@
+# Routing for alerts defined in ../prometheus/alerts.yml. Ownership and
+# escalation are described in docs/ON_CALL.md.
+#
+# Credentials are read from files so none live in the repo. Mount them at
+# /etc/alertmanager/secrets/ (locally: observability/alertmanager/secrets/,
+# which is git-ignored):
+#   pagerduty_routing_key  PagerDuty Events v2 integration key for the on-call service
+#   slack_webhook_url      Slack incoming webhook for #aurarisk-alerts
+# Until they exist, Alertmanager still starts and alerts are visible in its
+# UI (http://localhost:9093); notification attempts fail and are logged.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: alerts-channel
+  group_by: [alertname, component]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Pages go to the primary on-call and are also posted in the channel.
+    - matchers: [severity="page"]
+      receiver: oncall-pager
+      repeat_interval: 1h
+      continue: true
+    - matchers: [severity=~"page|ticket"]
+      receiver: alerts-channel
+
+receivers:
+  - name: oncall-pager
+    pagerduty_configs:
+      - routing_key_file: /etc/alertmanager/secrets/pagerduty_routing_key
+        severity: critical
+        description: '{{ .CommonAnnotations.summary }}'
+        links:
+          - href: '{{ .CommonAnnotations.runbook_url }}'
+            text: Runbook
+        details:
+          component: '{{ .CommonLabels.component }}'
+          team: '{{ .CommonLabels.team }}'
+          firing: '{{ .Alerts.Firing | len }}'
+
+  - name: alerts-channel
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack_webhook_url
+        channel: '#aurarisk-alerts'
+        send_resolved: true
+        title: '[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} ({{ .CommonLabels.severity }}, {{ .CommonLabels.component }})'
+        title_link: '{{ .CommonAnnotations.runbook_url }}'
+        text: |-
+          {{ range .Alerts }}• {{ .Annotations.summary }}{{ if .Annotations.description }}
+            {{ .Annotations.description }}{{ end }}
+          {{ end }}Owner: team {{ .CommonLabels.team }} · Runbook: {{ .CommonAnnotations.runbook_url }}
+
+inhibit_rules:
+  # When Postgres is down, its symptoms are noise.
+  - source_matchers: [alertname="PostgresDown"]
+    target_matchers:
+      - alertname=~"AuraRiskDbPool.*|PostgresConnectionsNearLimit|AuraRiskHighErrorRate|AuraRiskApiSlow|AuraRiskNotifier.*|AuraRiskPhotoProcessorStalled"
+  # A backend instance that is down cannot also be slow or failing.
+  - source_matchers: [alertname="AuraRiskBackendDown"]
+    target_matchers: [severity="ticket"]
+    equal: [instance]
+  # Provider failure explains stale data and slow risk lookups.
+  - source_matchers: [alertname="AuraRiskWeatherProviderFailing"]
+    target_matchers: [alertname=~"AuraRiskWeatherDataStale|AuraRiskRiskEndpointSlow"]
