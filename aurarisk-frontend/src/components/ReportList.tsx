@@ -11,7 +11,8 @@ function timeAgo(ts: string): string {
   const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
   if (diff < 1) return "just now";
   if (diff < 60) return `${diff}m ago`;
-  return `${Math.floor(diff / 60)}h ago`;
+  if (diff < 48 * 60) return `${Math.floor(diff / 60)}h ago`;
+  return `${Math.floor(diff / (24 * 60))}d ago`;
 }
 
 export default function ReportList({ reports }: { reports: CommunityReport[] }) {
@@ -36,7 +37,12 @@ export default function ReportList({ reports }: { reports: CommunityReport[] }) 
             <div className="min-w-0">
               <p className="text-xs text-gray-800 leading-snug">{r.note}</p>
               <p className="text-[10px] text-gray-400 mt-0.5 truncate">
-                {r.location.name} · {timeAgo(r.timestamp)}
+                {r.location.name} · {timeAgo(r.timestamp)} ·{" "}
+                {r.status === "verified" ? (
+                  <span className="text-green-700 font-medium">Verified</span>
+                ) : (
+                  <span>Unverified</span>
+                )}
               </p>
             </div>
           </li>

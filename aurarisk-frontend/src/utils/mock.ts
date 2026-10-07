@@ -1,4 +1,5 @@
-import type { RiskAssessment, CommunityReport, Location } from "../types";
+import type { RiskAssessment, CommunityReport, Location, NewReportInput } from "../types";
+import { validateNewReport, ValidationError } from "@aurarisk/shared";
 import { scoreToLevel } from "./risk";
 
 export function getMockRisk(location: Location): RiskAssessment {
@@ -63,4 +64,15 @@ export function getMockReports(): CommunityReport[] {
       timestamp: new Date(Date.now() - 900000).toISOString(),
     },
   ];
+}
+
+export function createMockReport(input: NewReportInput): CommunityReport {
+  const checked = validateNewReport(input);
+  if (!checked.ok) throw new ValidationError(checked.errors);
+  return {
+    id: crypto.randomUUID(),
+    ...checked.value,
+    timestamp: new Date().toISOString(),
+    status: "pending",
+  };
 }

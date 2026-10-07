@@ -228,3 +228,34 @@ func TestValidateProductionRequiresLongModeratorTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCORSOrigins(t *testing.T) {
+	clearEnv(t)
+	os.Unsetenv("CORS_ALLOWED_ORIGINS")
+	if got := CORSOrigins(); len(got) != 1 || got[0] != DefaultCORSOrigin {
+		t.Fatalf("default = %v", got)
+	}
+	t.Setenv("CORS_ALLOWED_ORIGINS", " https://app.example.org , http://localhost:5173,")
+	if got := CORSOrigins(); len(got) != 2 || got[0] != "https://app.example.org" {
+		t.Fatalf("parsed = %v", got)
+	}
+	t.Setenv("CORS_ALLOWED_ORIGINS", "")
+	if got := CORSOrigins(); len(got) != 0 {
+		t.Fatalf("empty = %v, want none (CORS disabled)", got)
+	}
+}
+
+func TestValidateRejectsBadCORSOrigins(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://u:p@db/app")
+	for _, bad := range []string{"*", "app.example.org", "https://app.example.org/", "https://app.example.org/path", "ftp://x.org"} {
+		t.Setenv("CORS_ALLOWED_ORIGINS", bad)
+		if err := Validate(); err == nil || !strings.Contains(err.Error(), "CORS_ALLOWED_ORIGINS") {
+			t.Errorf("%q: Validate() = %v", bad, err)
+		}
+	}
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.org,http://localhost:5173")
+	if err := Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

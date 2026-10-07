@@ -4,7 +4,7 @@
 
 AuraRisk combines location search, map visualization, weather-based flood risk, and community reports. A user selects a location or uses device geolocation, then the UI loads a risk assessment and nearby reports for that point.
 
-The current implementation is a prototype. The frontend defaults to local mock data, while the Go backend provides the real weather and report APIs when enabled.
+The current implementation is a prototype. The web frontend calls the Go backend, which provides the weather-risk and community-report APIs.
 
 ## Repository layout
 
@@ -82,7 +82,12 @@ npm install
 npm run dev
 ```
 
-The Vite development server proxies `/api` to `http://localhost:8080`. To use the real backend, change `USE_BACKEND` to `true` in `src/api/risk.ts`. A production build can be generated with `npm run build`.
+The app calls the backend. In development, Vite proxies `/api` to `http://localhost:8080` (override with `API_PROXY_TARGET`). Settings are in `aurarisk-frontend/.env.example`:
+
+- `VITE_API_BASE_URL`: backend origin, compiled in at build time. Leave it empty to serve the app and API from one origin behind a reverse proxy. If the API is on another origin, add the app's origin to the backend's `CORS_ALLOWED_ORIGINS`.
+- `VITE_USE_MOCK_API=true`: mock data for UI work without a backend. Development only; production builds never include the mock code.
+
+Build for production with `npm run build`.
 
 ## Current API
 
@@ -101,7 +106,7 @@ The app is suitable for a development demo or pilot, but it should not yet be us
 
 ### Launch blockers
 
-1. **Use real frontend mode.** Replace the mock default with a build-time API base URL and environment-specific configuration. Avoid compiling mock behavior into a production build.
+1. ~~**Use real frontend mode.**~~ Done: the web app calls the backend, the API origin is a build-time setting (`VITE_API_BASE_URL`), and mock data is development-only and excluded from production builds.
 2. ~~**Remove default secrets and credentials.**~~ Done: Compose and the backend no longer ship credentials, production startup fails on missing or development secrets, and secrets can come from mounted files or AWS Secrets Manager (see [Secrets and production configuration](#secrets-and-production-configuration)).
 3. **Secure report creation.** Add authentication or abuse controls, request size limits, strict latitude/longitude validation, note length limits, spam protection, moderation, and audit logging.
 4. **Add database migrations.** Run versioned migrations as a deployment step instead of embedding schema creation in application startup. Add constraints and indexes appropriate for geographic queries.

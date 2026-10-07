@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Location, ReportCategory } from "../types";
+import type { CommunityReport, Location, ReportCategory } from "../types";
 
 const CATEGORIES: { value: ReportCategory; label: string; icon: string }[] = [
   { value: "flooding", label: "Flooding", icon: "🌊" },
@@ -10,18 +10,37 @@ const CATEGORIES: { value: ReportCategory; label: string; icon: string }[] = [
 
 interface Props {
   location: Location | null;
-  onSubmit: (category: ReportCategory, note: string) => void;
+  /** Rejects with a user-facing message on failure. */
+  onSubmit: (category: ReportCategory, note: string) => Promise<CommunityReport>;
 }
 
 export default function ReportForm({ location, onSubmit }: Props) {
   const [category, setCategory] = useState<ReportCategory>("flooding");
   const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!location || !note.trim()) return;
-    onSubmit(category, note.trim());
-    setNote("");
+    if (!location || !note.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const report = await onSubmit(category, note.trim());
+      // Only clear the note once the server has it, so a failure loses nothing.
+      setNote("");
+      setNotice(
+        report.duplicate_of
+          ? "Thanks. A similar report was already filed nearby, so yours was linked to it."
+          : "Thanks. Your report was submitted and will show as unverified until it is confirmed."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not submit the report.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -53,11 +72,21 @@ export default function ReportForm({ location, onSubmit }: Props) {
         />
         <button
           type="submit"
-          disabled={!location || !note.trim()}
+          disabled={!location || !note.trim() || submitting}
           className="w-full py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
         >
-          Submit Report
+          {submitting ? "Submitting…" : "Submit Report"}
         </button>
+        {error && (
+          <p role="alert" className="text-xs text-red-700">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="text-xs text-green-700">
+            {notice}
+          </p>
+        )}
       </form>
     </div>
   );

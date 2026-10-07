@@ -78,7 +78,7 @@ The backend was verified to build and run successfully with the database availab
 
 ## Web and mobile clients
 
-- `aurarisk-frontend/`: Vite + React web app (`npm install && npm run dev`)
+- `aurarisk-frontend/`: Vite + React web app (`npm install && npm run dev`). It calls the backend through the dev server's `/api` proxy, so start the backend first. Set `VITE_API_BASE_URL` for builds that talk to an API on another origin (and list the app in the backend's `CORS_ALLOWED_ORIGINS`), or `VITE_USE_MOCK_API=true` to work on the UI without a backend. See `aurarisk-frontend/.env.example`.
 - `aurarisk-mobile/`: Expo app (`npm install && npx expo start`). Set `EXPO_PUBLIC_API_BASE_URL` to an address the device can reach (for example `http://10.0.2.2:8080` on the Android emulator).
 - `packages/shared/`: API types, client, and validation used by both. See [its README](packages/shared/README.md).
 

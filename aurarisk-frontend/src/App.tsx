@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { Location, RiskAssessment, CommunityReport, ReportCategory } from "./types";
 import { fetchRisk, fetchReports, submitReport } from "./api/risk";
+import { describeError } from "./api/errors";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import MapView from "./components/MapView";
@@ -13,21 +14,47 @@ export default function App() {
   const [risk, setRisk] = useState<RiskAssessment | null>(null);
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Only the latest selection may update state; slower earlier requests are ignored.
+  const latestRequest = useRef(0);
 
   const loadLocation = useCallback(async (loc: Location) => {
+    const request = ++latestRequest.current;
     setSelectedLocation(loc);
     setCenter([loc.lon, loc.lat]);
+    setRisk(null);
+    setReports([]);
+    setLoadError(null);
+    setLoading(true);
 
-    try {
-      const [riskData, reportData] = await Promise.all([
-        fetchRisk(loc),
-        fetchReports(loc),
-      ]);
-      setRisk(riskData);
-      setReports(reportData);
-    } catch (err) {
-      console.error("Failed to load location data", err);
+    // Load independently so a weather outage doesn't hide community reports.
+    const [riskResult, reportsResult] = await Promise.allSettled([
+      fetchRisk(loc),
+      fetchReports(loc),
+    ]);
+    if (request !== latestRequest.current) return;
+
+    if (riskResult.status === "fulfilled") setRisk(riskResult.value);
+    else console.error("Failed to load risk", riskResult.reason);
+    if (reportsResult.status === "fulfilled") setReports(reportsResult.value);
+    else console.error("Failed to load reports", reportsResult.reason);
+
+    const riskError = riskResult.status === "rejected" ? describeError(riskResult.reason) : null;
+    const reportsError = reportsResult.status === "rejected" ? describeError(reportsResult.reason) : null;
+    if (riskError && reportsError && riskError === reportsError) {
+      setLoadError(`Couldn't load flood risk or reports. ${riskError}`);
+    } else {
+      setLoadError(
+        [
+          riskError && `Flood risk is unavailable. ${riskError}`,
+          reportsError && `Community reports are unavailable. ${reportsError}`,
+        ]
+          .filter(Boolean)
+          .join(" ") || null
+      );
     }
+    setLoading(false);
   }, []);
 
   const handleLocate = useCallback(() => {
@@ -45,15 +72,20 @@ export default function App() {
     );
   }, [loadLocation]);
 
+  // Throws a user-facing message so the form can keep the note and show it.
   const handleSubmitReport = useCallback(
     async (category: ReportCategory, note: string) => {
-      if (!selectedLocation) return;
+      if (!selectedLocation) throw new Error("Choose a location first.");
+      let newReport: CommunityReport;
       try {
-        const newReport = await submitReport(selectedLocation, category, note);
-        setReports((prev) => [newReport, ...prev]);
+        newReport = await submitReport(selectedLocation, category, note);
       } catch (err) {
         console.error("Failed to submit report", err);
+        throw new Error(describeError(err));
       }
+      // A duplicate is stored but not listed, so don't show it twice.
+      if (!newReport.duplicate_of) setReports((prev) => [newReport, ...prev]);
+      return newReport;
     },
     [selectedLocation]
   );
@@ -71,6 +103,8 @@ export default function App() {
           risk={risk}
           reports={reports}
           selectedLocation={selectedLocation}
+          loading={loading}
+          loadError={loadError}
           onSubmitReport={handleSubmitReport}
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}

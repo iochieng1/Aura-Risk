@@ -74,6 +74,12 @@ func Validate() error {
 		problems = append(problems, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must be set together")
 	}
 
+	for _, origin := range CORSOrigins() {
+		if err := checkOrigin(origin); err != nil {
+			problems = append(problems, "CORS_ALLOWED_ORIGINS: "+err.Error())
+		}
+	}
+
 	moderators, err := ModeratorTokens()
 	if err != nil {
 		problems = append(problems, err.Error())
@@ -202,4 +208,46 @@ func ModeratorTokens() (map[string]string, error) {
 		tokens[name] = token
 	}
 	return tokens, nil
+}
+
+// GetList reads a comma-separated list, ignoring blanks. Unset uses fallback;
+// set but empty gives an empty list.
+func GetList(key string, fallback []string) []string {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		return fallback
+	}
+	var out []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// DefaultCORSOrigin is the Vite dev server.
+const DefaultCORSOrigin = "http://localhost:5173"
+
+// CORSOrigins returns the browser origins allowed to call the API, from
+// CORS_ALLOWED_ORIGINS. Unset allows the local Vite dev server only.
+func CORSOrigins() []string {
+	return GetList("CORS_ALLOWED_ORIGINS", []string{DefaultCORSOrigin})
+}
+
+// checkOrigin accepts a bare scheme://host[:port]. A wildcard is refused
+// because the API allows credentials.
+func checkOrigin(origin string) error {
+	if origin == "*" {
+		return errors.New(`"*" is not allowed; list each web app origin`)
+	}
+	u, err := url.Parse(origin)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		return fmt.Errorf("%q must look like https://app.example.org (scheme and host only)", origin)
+	}
+	if strings.HasSuffix(origin, "/") {
+		return fmt.Errorf("%q must not end with a slash", origin)
+	}
+	return nil
 }
