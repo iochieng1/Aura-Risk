@@ -1,10 +1,16 @@
-import { type FieldErrors, type Location, parseCoordinates, searchPlaces, validateLocation } from '@aurarisk/shared';
+import {
+  type FieldErrors,
+  type Location,
+  MIN_PLACE_QUERY_LENGTH,
+  parseCoordinates,
+  searchPlaces,
+  validateLocation,
+} from '@aurarisk/shared';
 import Constants from 'expo-constants';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { formatCoordinates, getDeviceLocation, getLocationPermission, LocationPermission } from '../location/deviceLocation';
 
-const SEARCH_DEBOUNCE_MS = 400;
 const USER_AGENT = `AuraRisk-mobile/${Constants.expoConfig?.version ?? 'dev'}`;
 
 type ManualMode = 'search' | 'coordinates';
@@ -29,7 +35,8 @@ export default function LocationPicker({ value, onChange }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Location[]>([]);
   const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // The query the shown results (or "no matches") belong to.
+  const [searched, setSearched] = useState<string | null>(null);
   const searchSeq = useRef(0);
 
   const [manualName, setManualName] = useState('');
@@ -39,7 +46,6 @@ export default function LocationPicker({ value, onChange }: Props) {
 
   useEffect(() => {
     getLocationPermission().then(setPermission);
-    return () => clearTimeout(searchTimer.current);
   }, []);
 
   const useMyLocation = async () => {
@@ -72,25 +78,27 @@ export default function LocationPicker({ value, onChange }: Props) {
 
   const onQueryChange = (text: string) => {
     setQuery(text);
-    clearTimeout(searchTimer.current);
+    setResults([]);
+    setSearched(null);
+  };
+
+  // Nominatim's usage policy forbids search-as-you-type, so search only on submit.
+  const runSearch = async () => {
+    const q = query.trim();
+    if (q.length < MIN_PLACE_QUERY_LENGTH) return;
     const seq = ++searchSeq.current;
-    if (text.trim().length < 3) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
     setSearching(true);
-    searchTimer.current = setTimeout(async () => {
-      const found = await searchPlaces(text, { userAgent: USER_AGENT });
-      // Ignore responses that arrive after the user has typed something newer.
-      if (seq !== searchSeq.current) return;
-      setResults(found);
-      setSearching(false);
-    }, SEARCH_DEBOUNCE_MS);
+    const found = await searchPlaces(q, { userAgent: USER_AGENT });
+    // Ignore responses that arrive after the user has searched for something newer.
+    if (seq !== searchSeq.current) return;
+    setResults(found);
+    setSearched(q);
+    setSearching(false);
   };
 
   const pickResult = (location: Location) => {
     setResults([]);
+    setSearched(null);
     setQuery(location.name.split(',')[0]);
     setNotice(null);
     onChange(location);
@@ -169,12 +177,21 @@ export default function LocationPicker({ value, onChange }: Props) {
             placeholder="Town, street, or landmark"
             value={query}
             onChangeText={onQueryChange}
+            onSubmitEditing={runSearch}
             autoCorrect={false}
             returnKeyType="search"
             accessibilityLabel="Search for a place"
           />
+          <Pressable
+            style={[styles.button, (searching || query.trim().length < MIN_PLACE_QUERY_LENGTH) && styles.disabled]}
+            onPress={runSearch}
+            disabled={searching || query.trim().length < MIN_PLACE_QUERY_LENGTH}
+            accessibilityRole="button"
+          >
+            <Text style={styles.buttonText}>Search</Text>
+          </Pressable>
           {searching && <ActivityIndicator />}
-          {!searching && query.trim().length >= 3 && results.length === 0 && (
+          {!searching && searched !== null && results.length === 0 && (
             <Text style={styles.meta}>No matches. Try a nearby town, or enter coordinates.</Text>
           )}
           {results.map((r) => (
