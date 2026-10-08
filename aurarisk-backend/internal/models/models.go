@@ -14,6 +14,17 @@ type RiskAssessment struct {
 	Level    string   `json:"level"`
 	Summary  string   `json:"summary"`
 	Tips     []string `json:"tips"`
+	// Stale is true when live weather was unavailable and cached data (see
+	// SourceTimestamps) was used instead.
+	Stale            bool              `json:"stale"`
+	SourceTimestamps *SourceTimestamps `json:"source_timestamps,omitempty"`
+}
+
+type SourceTimestamps struct {
+	// When the weather data was retrieved from the provider.
+	WeatherFetchedAt time.Time `json:"weather_fetched_at"`
+	// When the provider's current conditions were valid.
+	WeatherObservedAt *time.Time `json:"weather_observed_at,omitempty"`
 }
 
 type CommunityReport struct {

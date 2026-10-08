@@ -74,6 +74,16 @@ var (
 		Buckets: []float64{300, 900, 1800, 3600, 2 * 3600, 3 * 3600, 6 * 3600, 12 * 3600, 24 * 3600},
 	})
 
+	weatherLookups = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "aurarisk_weather_lookups_total",
+		Help: "Weather lookups by how they were served: hit, fetched, stale, throttled, unavailable.",
+	}, []string{"result"})
+
+	circuitOpen = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "aurarisk_provider_circuit_open",
+		Help: "1 while calls to the provider are suspended after repeated failures.",
+	}, []string{"provider"})
+
 	pushTickets = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aurarisk_push_tickets_total",
 		Help: "Expo push tickets returned, by status (ok, device_gone, error).",
@@ -202,4 +212,17 @@ func AddRetentionDeleted(kind, reason string, n int) {
 	if n > 0 {
 		retentionDeleted.WithLabelValues(kind, reason).Add(float64(n))
 	}
+}
+
+// ObserveWeatherLookup records how a weather lookup was served.
+func ObserveWeatherLookup(result string) {
+	weatherLookups.WithLabelValues(result).Inc()
+}
+
+func SetCircuitOpen(provider string, open bool) {
+	v := 0.0
+	if open {
+		v = 1
+	}
+	circuitOpen.WithLabelValues(provider).Set(v)
 }

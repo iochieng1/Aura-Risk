@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"aurarisk-backend/internal/services"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
@@ -30,9 +31,14 @@ func GetRisk(c *gin.Context) {
 
 	locationName := "Selected Location"
 
-	risk, err := services.GenerateRiskAssessment(lat, lon, locationName)
+	risk, err := services.GenerateRiskAssessment(c.Request.Context(), lat, lon, locationName)
+	if errors.Is(err, services.ErrWeatherUnavailable) {
+		c.Header("Retry-After", "60")
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		return
+	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 

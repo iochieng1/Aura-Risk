@@ -113,6 +113,8 @@ In production:
 | `aurarisk_provider_request_duration_seconds{provider,operation}` | Provider latency |
 | `aurarisk_provider_last_success_timestamp_seconds{provider}` | Last successful call per provider |
 | `aurarisk_weather_observation_age_seconds` | Age of Open-Meteo's current conditions when fetched |
+| `aurarisk_weather_lookups_total{result}` | Weather lookups: `hit`, `fetched`, `stale`, `throttled`, `unavailable` |
+| `aurarisk_provider_circuit_open{provider}` | 1 while Open-Meteo calls are suspended after repeated failures |
 | `aurarisk_push_tickets_total{status}` | Per-message Expo results: `ok`, `device_gone`, `error` |
 | `aurarisk_worker_last_success_timestamp_seconds{worker}` | Last successful notifier / photo processor / report verifier / retention run |
 | `aurarisk_moderation_queue_reports` | Pending reports awaiting verification or review |
@@ -197,15 +199,22 @@ Postgres is above 80% of `max_connections`. When it is full, new connections
 
 ### AuraRiskWeatherProviderFailing
 
-More than 25% of Open-Meteo calls are failing. `/api/risk` returns 500, and
-the notifier skips subscriptions it cannot assess, so **flood alerts are not
-being evaluated**.
+More than 25% of Open-Meteo calls are failing. `/api/risk` serves cached
+data marked `stale: true` for up to `WEATHER_STALE_MAX` (default 3h), then
+returns 503. The notifier never alerts from stale data, so **flood alerts are
+not being evaluated**.
+
+After 5 consecutive failures the backend stops calling Open-Meteo for 30s at a
+time (`aurarisk_provider_circuit_open`), probing once per cooldown. How
+lookups are being served shows in `aurarisk_weather_lookups_total{result}`.
 
 1. Check https://open-meteo.com status and whether the failures are timeouts
    or HTTP errors (backend logs: `failed to fetch weather data`,
    `weather API returned status ...`).
-2. HTTP 429: we are rate-limited. Reduce traffic or move to a commercial
-   Open-Meteo plan / API key.
+2. HTTP 429 (`weather API rate limit reached`): we are rate-limited. Lower
+   `WEATHER_MAX_REQUESTS_PER_MINUTE` so instances x budget stays under the
+   plan limit, or set `OPEN_METEO_API_KEY` for a commercial plan. Lookups
+   with `result="throttled"` mean our own budget, not Open-Meteo, refused.
 3. Timeouts or DNS errors from only our hosts: check egress networking.
 4. Post in `#aurarisk-alerts` that risk data is unavailable. If the outage is
    long and there is an active flood event, tell the service owner so they can

@@ -23,7 +23,7 @@ type PushSender interface {
 	Send(ctx context.Context, messages []services.PushMessage) ([]services.PushTicket, error)
 }
 
-type RiskAssessor func(lat, lon float64, name string) (*models.RiskAssessment, error)
+type RiskAssessor func(ctx context.Context, lat, lon float64, name string) (*models.RiskAssessment, error)
 
 // Notifier evaluates risk for subscribed locations and pushes alerts to
 // devices that consented, honoring each subscription's quiet hours.
@@ -146,9 +146,15 @@ func (n *Notifier) RunOnce(ctx context.Context) error {
 		key := fmt.Sprintf("%.2f,%.2f", sub.Lat, sub.Lon)
 		assessment, ok := assessments[key]
 		if !ok {
-			assessment, err = n.Assess(sub.Lat, sub.Lon, sub.Name)
+			assessment, err = n.Assess(ctx, sub.Lat, sub.Lon, sub.Name)
 			if err != nil {
 				log.Printf("⚠️ Risk assessment failed for subscription %s: %v", sub.ID, err)
+				continue
+			}
+			// Alerts describe current conditions, so never send one from
+			// cached data. The next run retries with live data.
+			if assessment.Stale {
+				log.Printf("⚠️ Skipping subscription %s: weather data is stale", sub.ID)
 				continue
 			}
 			assessments[key] = assessment

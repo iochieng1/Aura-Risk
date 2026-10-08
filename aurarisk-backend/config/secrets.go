@@ -21,6 +21,7 @@ var SecretKeys = []string{
 	"AWS_SECRET_ACCESS_KEY",
 	"EXPO_ACCESS_TOKEN",
 	"MODERATOR_TOKENS",
+	"OPEN_METEO_API_KEY",
 }
 
 // SecretFetcher returns the raw value of a secret from a secret manager.
