@@ -1,8 +1,10 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"aurarisk-backend/internal/models"
 )
@@ -123,11 +125,24 @@ func GetTips(level string) []string {
 	return tips[level]
 }
 
-func GenerateRiskAssessment(lat, lon float64, locationName string) (*models.RiskAssessment, error) {
-	weather, err := FetchWeatherData(lat, lon)
+// weatherService supplies weather to risk assessments. main replaces it with
+// one built from configuration before serving traffic.
+var weatherService = NewWeatherService(&OpenMeteoClient{}, WeatherConfig{})
+
+// SetWeatherService replaces the weather source. Call it before serving.
+func SetWeatherService(s *WeatherService) {
+	weatherService = s
+}
+
+// GenerateRiskAssessment scores flood risk at a point. When the weather
+// provider is failing it may use cached data, in which case the result is
+// marked Stale. It returns ErrWeatherUnavailable when there is nothing to use.
+func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName string) (*models.RiskAssessment, error) {
+	w, err := weatherService.Get(ctx, lat, lon)
 	if err != nil {
 		return nil, err
 	}
+	weather := w.Data
 
 	score := CalculateRiskScore(lat, lon, weather)
 	level := ScoreToLevel(score)
@@ -148,5 +163,19 @@ func GenerateRiskAssessment(lat, lon float64, locationName string) (*models.Risk
 		Level:   level,
 		Summary: summary,
 		Tips:    tips,
+		Stale:   w.Stale,
+		SourceTimestamps: &models.SourceTimestamps{
+			WeatherFetchedAt:  w.FetchedAt.UTC(),
+			WeatherObservedAt: observedAt(weather),
+		},
 	}, nil
+}
+
+func observedAt(weather *OpenMeteoResponse) *time.Time {
+	t, ok := weather.ObservedAt()
+	if !ok {
+		return nil
+	}
+	t = t.UTC()
+	return &t
 }

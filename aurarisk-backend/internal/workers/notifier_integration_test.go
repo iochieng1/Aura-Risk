@@ -67,7 +67,7 @@ func TestNotifierRunOnce(t *testing.T) {
 	n := &Notifier{
 		DB:   db,
 		Push: push,
-		Assess: func(lat, lon float64, name string) (*models.RiskAssessment, error) {
+		Assess: func(_ context.Context, lat, lon float64, name string) (*models.RiskAssessment, error) {
 			return &models.RiskAssessment{Level: level, Score: 90, Tips: []string{"Move to higher ground."}}, nil
 		},
 	}
@@ -115,5 +115,49 @@ func TestNotifierRunOnce(t *testing.T) {
 	db.QueryRow(`SELECT last_notified_level FROM location_subscriptions WHERE account_id = $1`, accountID).Scan(&lastLevel)
 	if lastLevel.Valid {
 		t.Fatalf("expected reset, got %v", lastLevel.String)
+	}
+}
+
+// Requires TEST_DATABASE_URL pointing at a disposable database.
+func TestNotifierSkipsStaleWeather(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	t.Setenv("DATABASE_URL", dsn)
+	db := database.Connect()
+	defer db.Close()
+	database.Migrate(db)
+
+	var accountID string
+	if err := db.QueryRow(`INSERT INTO accounts DEFAULT VALUES RETURNING id`).Scan(&accountID); err != nil {
+		t.Fatal(err)
+	}
+	defer db.Exec(`DELETE FROM accounts WHERE id = $1`, accountID)
+	if _, err := db.Exec(`INSERT INTO devices (account_id, platform, push_token, push_consented_at) VALUES ($1, 'ios', 'ExponentPushToken[stale-test]', NOW())`, accountID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO location_subscriptions (account_id, name, lat, lon, min_level) VALUES ($1, 'Stale', 3.5, 4.5, 'Advisory')`, accountID); err != nil {
+		t.Fatal(err)
+	}
+
+	push := &fakePush{tickets: func(services.PushMessage) services.PushTicket { return services.PushTicket{Status: "ok"} }}
+	n := &Notifier{
+		DB:   db,
+		Push: push,
+		Assess: func(_ context.Context, lat, lon float64, name string) (*models.RiskAssessment, error) {
+			return &models.RiskAssessment{Level: "Emergency", Score: 95, Stale: true}, nil
+		},
+	}
+	if err := n.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(push.sent) != 0 {
+		t.Fatalf("sent %d alerts from stale weather, want none", len(push.sent))
+	}
+	var level sql.NullString
+	db.QueryRow(`SELECT last_notified_level FROM location_subscriptions WHERE account_id = $1`, accountID).Scan(&level)
+	if level.Valid {
+		t.Fatalf("subscription marked notified (%s) from stale data", level.String)
 	}
 }

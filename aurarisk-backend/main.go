@@ -47,6 +47,23 @@ func main() {
 
 	handlers.SetDatabase(db)
 
+	staleFor := config.GetDuration("WEATHER_STALE_MAX", 3*time.Hour)
+	if staleFor == 0 {
+		staleFor = -1 // 0 in config means never serve stale data
+	}
+	openMeteo := &services.OpenMeteoClient{
+		URL:    config.GetEnv("OPEN_METEO_URL", ""),
+		APIKey: config.GetEnv("OPEN_METEO_API_KEY", ""),
+	}
+	services.SetWeatherService(services.NewWeatherService(openMeteo, services.WeatherConfig{
+		FreshFor:             config.GetDuration("WEATHER_CACHE_TTL", 15*time.Minute),
+		StaleFor:             staleFor,
+		MaxRequestsPerMinute: config.GetInt("WEATHER_MAX_REQUESTS_PER_MINUTE", 300),
+	}))
+	if openMeteo.APIKey == "" && config.IsProduction() {
+		log.Println("⚠️ OPEN_METEO_API_KEY is not set: using the free Open-Meteo API, which is for non-commercial use only")
+	}
+
 	moderators, err := config.ModeratorTokens()
 	if err != nil {
 		log.Fatalf("Startup aborted: %v", err)

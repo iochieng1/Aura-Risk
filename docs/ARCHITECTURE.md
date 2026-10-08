@@ -21,7 +21,7 @@ The current implementation is a prototype. The web frontend calls the Go backend
 1. The user searches for a location through Nominatim, selects a map point, or grants browser geolocation access.
 2. `App.tsx` stores the selected location and requests risk and reports in parallel.
 3. The frontend calls `/api/risk?lat=<lat>&lon=<lon>` and `/api/reports?lat=<lat>&lon=<lon>&radius=10` when backend mode is enabled.
-4. The backend fetches Open-Meteo forecast data for the coordinates. It requests seven days of hourly precipitation, rain, and `soil_moisture_0_to_7cm`, plus current weather values.
+4. The backend gets Open-Meteo forecast data for the coordinates' ~2 km grid cell. It requests seven days of hourly precipitation, rain, and `soil_moisture_0_to_7cm`, plus current weather values. Results are cached per cell for 15 minutes and concurrent requests for a cell share one fetch (`internal/services/weather.go`).
 5. The risk service combines current precipitation, the next six forecast hours, antecedent rainfall, recent soil moisture, weather severity, and a terrain placeholder factor into a score from 0 to 100.
 6. The frontend renders the score, risk level, tips, reports, and map markers.
 7. New reports are validated by the backend and inserted into PostgreSQL.
@@ -111,7 +111,7 @@ The app is suitable for a development demo or pilot, but it should not yet be us
 3. **Secure report creation.** Add authentication or abuse controls, request size limits, strict latitude/longitude validation, note length limits, spam protection, moderation, and audit logging.
 4. **Add database migrations.** Run versioned migrations as a deployment step instead of embedding schema creation in application startup. Add constraints and indexes appropriate for geographic queries.
 5. **Harden the API.** Add structured error responses, request IDs, CORS allowlists, rate limiting, timeouts, graceful shutdown, and health checks that distinguish process health from database and provider health.
-6. **Make weather access resilient.** Add caching by coordinate grid and time window, provider timeouts and retries with backoff, circuit breaking, and a stale-data policy. Open-Meteo and Nominatim usage must follow their service policies and rate limits.
+6. ~~**Make weather access resilient.**~~ Done: grid-cell caching with request coalescing, per-attempt timeouts and jittered retries, a circuit breaker, an outgoing call budget, and a stale-data policy (cached data up to `WEATHER_STALE_MAX` old is served with `stale: true`; otherwise `/api/risk` returns 503 with `Retry-After`). The notifier never alerts from stale data. Paid Open-Meteo plans are supported via `OPEN_METEO_API_KEY`. Originally: add caching by coordinate grid and time window, provider timeouts and retries with backoff, circuit breaking, and a stale-data policy. Open-Meteo and Nominatim usage must follow their service policies and rate limits.
 7. **Calibrate the risk model.** The terrain factor is a placeholder and the score has no regional validation. Do not present it as an official warning until it is evaluated against observed events and reviewed by domain experts.
 8. **Add tests and CI.** Cover score edge cases, malformed API inputs, database failures, Open-Meteo decoding, handler responses, and frontend builds. Run formatting, static analysis, tests, and dependency checks on every pull request.
 9. **Deploy the frontend and backend separately.** Configure HTTPS, a real reverse proxy or API gateway, immutable builds, environment-specific settings, backups, restore drills, and rollback procedures.
@@ -120,7 +120,7 @@ The app is suitable for a development demo or pilot, but it should not yet be us
 
 - ~~Add Prometheus-compatible metrics.~~ Done (see [ON_CALL.md](ON_CALL.md)). Still to do: centralized logs with correlation IDs.
 - Expose data freshness in the UI. Provider response age is now tracked as `aurarisk_weather_observation_age_seconds`.
-- Return confidence, source timestamps, and model version with risk assessments.
+- Return confidence and model version with risk assessments. (Weather source timestamps are now returned as `source_timestamps`.)
 - Use PostGIS or a geospatial index for accurate radius searches instead of a latitude/longitude bounding box.
 - ~~Add report verification, duplicate detection, moderation status, and retention policies.~~ Done: see [REPORT_CURATION.md](REPORT_CURATION.md).
 - Add accessible loading, empty, error, and offline states in the frontend.
