@@ -104,12 +104,11 @@ jobs:
         run: python3 -m json.tool observability/grafana/dashboards/aurarisk-overview.json > /dev/null
 
   dependencies:
-    name: Dependency vulnerabilities (report only)
+    name: Dependency vulnerabilities
     runs-on: ubuntu-latest
-    # Not blocking yet: the backend targets Go 1.22, which no longer gets
-    # security fixes, so this reports known issues until Go and the affected
-    # modules are upgraded. Make it blocking once it passes.
-    continue-on-error: true
+    # Fails when code paths reach a known vulnerability in Go or a module.
+    # Fix by upgrading the go directive in go.mod (to a supported release) or
+    # the affected module.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -118,4 +117,4 @@ jobs:
           cache-dependency-path: aurarisk-backend/go.sum
       - name: govulncheck
         working-directory: aurarisk-backend
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.3 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
