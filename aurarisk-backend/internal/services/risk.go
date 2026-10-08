@@ -154,6 +154,12 @@ func SetWeatherService(s *WeatherService) {
 	weatherService = s
 }
 
+// WeatherCircuitOpen reports whether weather calls are suspended after
+// repeated provider failures (risk lookups fall back to cached data).
+func WeatherCircuitOpen() bool {
+	return weatherService.CircuitOpen()
+}
+
 // GenerateRiskAssessment scores flood risk at a point. When the weather
 // provider is failing it may use cached data, in which case the result is
 // marked Stale. It returns ErrWeatherUnavailable when there is nothing to use.

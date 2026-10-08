@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -73,6 +74,17 @@ func main() {
 		log.Println("⚠️ MODERATOR_TOKENS is not set: the moderation API is disabled")
 	}
 
+	// Background workers stop when ctx is cancelled; shutdown waits for them
+	// so none is cut off mid-write when the database closes.
+	var workerWG sync.WaitGroup
+	startWorker := func(run func(context.Context)) {
+		workerWG.Add(1)
+		go func() {
+			defer workerWG.Done()
+			run(ctx)
+		}()
+	}
+
 	var store storage.ObjectStore
 	if bucket := config.GetEnv("S3_BUCKET", ""); bucket != "" {
 		s3Store, err := storage.NewS3Store(ctx, storage.S3Config{
@@ -97,7 +109,7 @@ func main() {
 		if addr := config.GetEnv("CLAMD_ADDR", ""); addr != "" {
 			processor.Scanner = services.NewClamdScanner(addr)
 		}
-		go processor.Run(ctx)
+		startWorker(processor.Run)
 	}
 
 	if interval := config.GetDuration("NOTIFIER_INTERVAL", config.DefaultNotifierInterval); interval > 0 {
@@ -107,12 +119,12 @@ func main() {
 			Assess:   services.GenerateRiskAssessment,
 			Interval: interval,
 		}
-		go notifier.Run(ctx)
+		startWorker(notifier.Run)
 		log.Printf("✅ Risk notifier running every %s", interval)
 	}
 
 	if interval := config.GetDuration("REPORT_VERIFIER_INTERVAL", 2*time.Minute); interval > 0 {
-		go (&workers.ReportVerifier{DB: db, Interval: interval}).Run(ctx)
+		startWorker((&workers.ReportVerifier{DB: db, Interval: interval}).Run)
 		log.Printf("✅ Report verifier running every %s", interval)
 	}
 
@@ -126,12 +138,21 @@ func main() {
 		policy.Pending = days("RETENTION_PENDING_DAYS", policy.Pending)
 		policy.Verified = days("RETENTION_VERIFIED_DAYS", policy.Verified)
 		policy.FailedPhoto = days("RETENTION_FAILED_PHOTO_DAYS", policy.FailedPhoto)
-		go (&workers.RetentionCleaner{DB: db, Store: store, Policy: policy, Interval: interval}).Run(ctx)
+		startWorker((&workers.RetentionCleaner{DB: db, Store: store, Policy: policy, Interval: interval}).Run)
 		log.Printf("✅ Retention cleanup running every %s", interval)
 	}
 
-	r := gin.Default()
-	r.Use(metrics.Middleware())
+	r := gin.New()
+	r.Use(handlers.RequestID(), handlers.AccessLog(), handlers.Recovery(), metrics.Middleware())
+	r.HandleMethodNotAllowed = true
+	r.NoRoute(handlers.NotFound)
+	r.NoMethod(handlers.MethodNotAllowed)
+
+	// Only these proxies may set the client IP via X-Forwarded-For; the rate
+	// limiter keys on it. Empty trusts none (the default for direct exposure).
+	if err := r.SetTrustedProxies(config.GetList("TRUSTED_PROXIES", nil)); err != nil {
+		log.Fatalf("Startup aborted: invalid TRUSTED_PROXIES: %v", err)
+	}
 
 	// Web app origins allowed to call the API from a browser (validated in
 	// config). Empty disables CORS, for when the app and API share an origin.
@@ -139,8 +160,8 @@ func main() {
 		r.Use(cors.New(cors.Config{
 			AllowOrigins:     origins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-			ExposeHeaders:    []string{"Content-Length"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", handlers.RequestIDHeader},
+			ExposeHeaders:    []string{"Content-Length", handlers.RequestIDHeader, "Retry-After"},
 			AllowCredentials: true,
 		}))
 	}
@@ -150,17 +171,24 @@ func main() {
 		c.Next()
 	})
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
+	// /health and /health/live: the process is up. /health/ready: it can
+	// serve traffic (database reachable, not draining).
+	r.GET("/health", handlers.Live)
+	r.GET("/health/live", handlers.Live)
+	r.GET("/health/ready", handlers.Ready)
 
-	api := r.Group("/api")
+	// Per-client limits; 0 disables. Writes that create rows or accounts get
+	// a tighter limit on top of the general one.
+	apiLimit := handlers.NewRateLimiter("api", config.GetInt("RATE_LIMIT_PER_MINUTE", 120)).Middleware()
+	writeLimit := handlers.NewRateLimiter("writes", config.GetInt("RATE_LIMIT_WRITES_PER_MINUTE", 20)).Middleware()
+
+	api := r.Group("/api", apiLimit)
 	{
 		api.GET("/risk", handlers.GetRisk)
 		api.GET("/reports", handlers.GetReports)
-		api.POST("/reports", handlers.OptionalAuth(), handlers.CreateReport)
+		api.POST("/reports", writeLimit, handlers.OptionalAuth(), handlers.CreateReport)
 
-		api.POST("/auth/device", handlers.RegisterDevice)
+		api.POST("/auth/device", writeLimit, handlers.RegisterDevice)
 		api.POST("/auth/refresh", handlers.RefreshTokens)
 
 		authed := api.Group("", handlers.RequireAuth())
@@ -176,7 +204,7 @@ func main() {
 			authed.PUT("/subscriptions/:id", handlers.UpdateSubscription)
 			authed.DELETE("/subscriptions/:id", handlers.DeleteSubscription)
 
-			authed.POST("/reports/:id/photos", handlers.CreatePhotoUpload)
+			authed.POST("/reports/:id/photos", writeLimit, handlers.CreatePhotoUpload)
 			authed.POST("/photos/:id/complete", handlers.CompletePhotoUpload)
 			authed.GET("/photos/:id", handlers.GetPhoto)
 		}
@@ -194,6 +222,11 @@ func main() {
 		Addr:              ":" + port,
 		Handler:           r,
 		ReadHeaderTimeout: 10 * time.Second,
+		// Bodies are small JSON (photos go straight to object storage), so
+		// slow clients are cut off rather than holding connections open.
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
@@ -220,12 +253,34 @@ func main() {
 
 	<-ctx.Done()
 	log.Println("Shutting down...")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Fail readiness first and give the load balancer time to notice before
+	// refusing connections. Set this above the balancer's health-check
+	// interval in production; 0 (the default) suits local runs.
+	handlers.SetDraining()
+	if drain := config.GetDuration("SHUTDOWN_DRAIN_DELAY", 0); drain > 0 {
+		log.Printf("Draining for %s", drain)
+		time.Sleep(drain)
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), config.GetDuration("SHUTDOWN_TIMEOUT", 20*time.Second))
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Graceful shutdown failed: %v", err)
 	}
+
+	workersDone := make(chan struct{})
+	go func() {
+		workerWG.Wait()
+		close(workersDone)
+	}()
+	select {
+	case <-workersDone:
+	case <-shutdownCtx.Done():
+		log.Println("⚠️ Background workers did not stop before the shutdown timeout")
+	}
+
 	if metricsServer != nil {
 		_ = metricsServer.Shutdown(shutdownCtx)
 	}
+	log.Println("Shutdown complete")
 }

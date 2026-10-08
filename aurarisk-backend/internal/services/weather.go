@@ -263,3 +263,10 @@ func (s *WeatherService) recordResultLocked(err error) {
 		metrics.SetCircuitOpen(metrics.ProviderOpenMeteo, true)
 	}
 }
+
+// CircuitOpen reports whether calls to the provider are currently suspended.
+func (s *WeatherService) CircuitOpen() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.now().Before(s.openUntil)
+}

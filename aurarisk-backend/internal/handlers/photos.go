@@ -38,7 +38,7 @@ func QuarantineKey(reportID, photoID string) string {
 
 func requirePhotoStore(c *gin.Context) bool {
 	if photoStore == nil {
-		c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "photo uploads are not configured"})
+		respondError(c, http.StatusServiceUnavailable, "photo uploads are not configured")
 		return false
 	}
 	return true
@@ -52,21 +52,21 @@ func CreatePhotoUpload(c *gin.Context) {
 	}
 	reportID := c.Param("id")
 	if !uuidPattern.MatchString(reportID) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
+		respondError(c, http.StatusNotFound, "report not found")
 		return
 	}
 
 	var req photoUploadRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		badRequestBody(c, err)
 		return
 	}
 	if !services.AllowedPhotoTypes[req.ContentType] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "content_type must be image/jpeg, image/png, or image/webp"})
+		respondError(c, http.StatusBadRequest, "content_type must be image/jpeg, image/png, or image/webp")
 		return
 	}
 	if req.SizeBytes <= 0 || req.SizeBytes > MaxPhotoBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("size_bytes must be between 1 and %d", MaxPhotoBytes)})
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("size_bytes must be between 1 and %d", MaxPhotoBytes))
 		return
 	}
 
@@ -82,7 +82,7 @@ func CreatePhotoUpload(c *gin.Context) {
 	var owner sql.NullString
 	err = tx.QueryRow(`SELECT account_id FROM community_reports WHERE id = $1 FOR UPDATE`, reportID).Scan(&owner)
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
+		respondError(c, http.StatusNotFound, "report not found")
 		return
 	}
 	if err != nil {
@@ -90,7 +90,7 @@ func CreatePhotoUpload(c *gin.Context) {
 		return
 	}
 	if !owner.Valid || owner.String != accountID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "only the report author can attach photos"})
+		respondError(c, http.StatusForbidden, "only the report author can attach photos")
 		return
 	}
 
@@ -105,7 +105,7 @@ func CreatePhotoUpload(c *gin.Context) {
 		return
 	}
 	if count >= MaxPhotosPerReport {
-		c.JSON(http.StatusConflict, gin.H{"error": fmt.Sprintf("a report can have at most %d photos", MaxPhotosPerReport)})
+		respondError(c, http.StatusConflict, fmt.Sprintf("a report can have at most %d photos", MaxPhotosPerReport))
 		return
 	}
 
@@ -147,7 +147,7 @@ func CreatePhotoUpload(c *gin.Context) {
 func CompletePhotoUpload(c *gin.Context) {
 	id := c.Param("id")
 	if !uuidPattern.MatchString(id) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "photo not found"})
+		respondError(c, http.StatusNotFound, "photo not found")
 		return
 	}
 
@@ -164,7 +164,7 @@ func CompletePhotoUpload(c *gin.Context) {
 		RETURNING status, slot.expired
 	`, id, c.GetString(ctxAccountID), photoUploadTTL.Seconds()).Scan(&status, &expired)
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "photo not found"})
+		respondError(c, http.StatusNotFound, "photo not found")
 		return
 	}
 	if err != nil {
@@ -172,7 +172,7 @@ func CompletePhotoUpload(c *gin.Context) {
 		return
 	}
 	if status == "pending_upload" && expired {
-		c.JSON(http.StatusGone, gin.H{"error": "upload slot expired; request a new one"})
+		respondError(c, http.StatusGone, "upload slot expired; request a new one")
 		return
 	}
 
@@ -182,7 +182,7 @@ func CompletePhotoUpload(c *gin.Context) {
 func GetPhoto(c *gin.Context) {
 	id := c.Param("id")
 	if !uuidPattern.MatchString(id) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "photo not found"})
+		respondError(c, http.StatusNotFound, "photo not found")
 		return
 	}
 
@@ -195,7 +195,7 @@ func GetPhoto(c *gin.Context) {
 		WHERE id = $1 AND account_id = $2
 	`, id, c.GetString(ctxAccountID)).Scan(&photo.ID, &photo.Status, &largeKey, &thumbKey)
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "photo not found"})
+		respondError(c, http.StatusNotFound, "photo not found")
 		return
 	}
 	if err != nil {

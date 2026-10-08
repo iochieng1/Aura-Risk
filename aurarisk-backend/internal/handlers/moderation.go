@@ -33,7 +33,7 @@ func SetModerators(tokens map[string]string) {
 func RequireModerator() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if len(moderatorTokenHashes) == 0 {
-			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "moderation is not configured"})
+			respondError(c, http.StatusServiceUnavailable, "moderation is not configured")
 			return
 		}
 		token, _ := bearerToken(c)
@@ -89,7 +89,7 @@ func scanModerationReport(row interface{ Scan(...any) error }) (models.Moderatio
 func ListModerationQueue(c *gin.Context) {
 	status := c.DefaultQuery("status", services.ReportPending)
 	if !services.IsModerationStatus(status) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, verified, or rejected"})
+		respondError(c, http.StatusBadRequest, "status must be pending, verified, or rejected")
 		return
 	}
 
@@ -101,13 +101,13 @@ func ListModerationQueue(c *gin.Context) {
 		duplicateFilter = "AND r.duplicate_of IS NOT NULL"
 	case "include":
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "duplicates must be include, only, or exclude"})
+		respondError(c, http.StatusBadRequest, "duplicates must be include, only, or exclude")
 		return
 	}
 
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	if err != nil || limit < 1 || limit > 100 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be between 1 and 100"})
+		respondError(c, http.StatusBadRequest, "limit must be between 1 and 100")
 		return
 	}
 
@@ -117,7 +117,7 @@ func ListModerationQueue(c *gin.Context) {
 	if raw := c.Query("before"); raw != "" {
 		t, err := time.Parse(time.RFC3339Nano, raw)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "before must be an RFC 3339 timestamp"})
+			respondError(c, http.StatusBadRequest, "before must be an RFC 3339 timestamp")
 			return
 		}
 		before = sql.NullString{String: t.UTC().Format("2006-01-02 15:04:05.999999"), Valid: true}
@@ -180,25 +180,25 @@ type moderationDecision struct {
 func ModerateReport(c *gin.Context) {
 	var req moderationDecision
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		badRequestBody(c, err)
 		return
 	}
 	if !services.IsModerationStatus(req.Status) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be pending, verified, or rejected"})
+		respondError(c, http.StatusBadRequest, "status must be pending, verified, or rejected")
 		return
 	}
 	if req.Status == services.ReportRejected && req.Reason == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "a reason is required to reject a report"})
+		respondError(c, http.StatusBadRequest, "a reason is required to reject a report")
 		return
 	}
 	if len(req.Reason) > 500 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "reason is too long"})
+		respondError(c, http.StatusBadRequest, "reason is too long")
 		return
 	}
 
 	reportID := c.Param("id")
 	if !uuidPattern.MatchString(reportID) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
+		respondError(c, http.StatusNotFound, "report not found")
 		return
 	}
 	moderator := c.GetString(ctxModerator)
@@ -213,7 +213,7 @@ func ModerateReport(c *gin.Context) {
 	var current string
 	err = tx.QueryRowContext(c.Request.Context(), `SELECT moderation_status FROM community_reports WHERE id = $1 FOR UPDATE`, reportID).Scan(&current)
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
+		respondError(c, http.StatusNotFound, "report not found")
 		return
 	}
 	if err != nil {
@@ -262,7 +262,7 @@ func ModerateReport(c *gin.Context) {
 // ListModerationEvents returns a report's moderation history, oldest first.
 func ListModerationEvents(c *gin.Context) {
 	if !uuidPattern.MatchString(c.Param("id")) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "report not found"})
+		respondError(c, http.StatusNotFound, "report not found")
 		return
 	}
 	rows, err := db.QueryContext(c.Request.Context(), `

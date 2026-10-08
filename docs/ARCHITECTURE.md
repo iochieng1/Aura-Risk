@@ -105,7 +105,8 @@ Build for production with `npm run build`.
 
 ## Current API
 
-- `GET /health`: liveness-style health response.
+- `GET /health`, `GET /health/live`: liveness. 200 while the process serves HTTP; checks no dependencies, so use it for restarts.
+- `GET /health/ready`: readiness, for load balancers. 503 when the database is unreachable or the instance is shutting down. A suspended weather provider reports `"status": "degraded"` with `checks.weather: "circuit_open"` but stays 200, because cached weather can still be served and every instance shares the provider.
 - `GET /api/risk?lat=<lat>&lon=<lon>`: weather-based risk assessment.
   `stale: true` means Open-Meteo was failing and cached weather (up to `WEATHER_STALE_MAX` old) was used; with nothing usable the endpoint returns 503 with `Retry-After`. Example:
 
@@ -124,6 +125,20 @@ Build for production with `npm run build`.
 
 The report endpoint expects `location`, `category`, and `note`. Valid categories are `flooding`, `road_blocked`, `water_rising`, and `drainage_issue`.
 
+### Errors, request IDs, and limits
+
+Every error has the same JSON shape:
+
+```json
+{ "error": "invalid lat", "code": "bad_request", "request_id": "8fcc638fa155da0576a2d49a" }
+```
+
+- `error` is a human-readable message (unchanged from before, so older clients keep working). 500s say only `internal server error`; the details are logged with the request ID.
+- `code` comes from the HTTP status: `bad_request`, `not_found`, `request_entity_too_large`, `too_many_requests`, `service_unavailable`, and so on.
+- `request_id` matches the `X-Request-ID` response header and the access log line. A caller or proxy may send its own `X-Request-ID` (up to 64 characters from `A-Za-z0-9._:-`); otherwise the backend generates one.
+
+Bodies over 64 KiB get 413. Each client IP gets `RATE_LIMIT_PER_MINUTE` (120) requests per minute across `/api`. Creating reports, registering devices, and starting photo uploads also count against `RATE_LIMIT_WRITES_PER_MINUTE` (20). Over the limit the API returns 429 with `Retry-After`. Limits are per instance and in memory. Behind a proxy, set `TRUSTED_PROXIES`, or every client shares the proxy's IP.
+
 ## Production readiness assessment
 
 ### Current status
@@ -136,7 +151,7 @@ The app is suitable for a development demo or pilot, but it should not yet be us
 2. ~~**Remove default secrets and credentials.**~~ Done: Compose and the backend no longer ship credentials, production startup fails on missing or development secrets, and secrets can come from mounted files or AWS Secrets Manager (see [Secrets and production configuration](#secrets-and-production-configuration)).
 3. **Secure report creation.** Add authentication or abuse controls, request size limits, strict latitude/longitude validation, note length limits, spam protection, moderation, and audit logging.
 4. **Add database migrations.** Run versioned migrations as a deployment step instead of embedding schema creation in application startup. Add constraints and indexes appropriate for geographic queries.
-5. **Harden the API.** Add structured error responses, request IDs, CORS allowlists, rate limiting, timeouts, graceful shutdown, and health checks that distinguish process health from database and provider health.
+5. ~~**Harden the API.**~~ Done: see [Errors, request IDs, and limits](#errors-request-ids-and-limits); CORS allowlist from launch blocker 1; graceful shutdown drains readiness, finishes requests, and waits for background workers. Originally: add structured error responses, request IDs, CORS allowlists, rate limiting, timeouts, graceful shutdown, and health checks that distinguish process health from database and provider health.
 6. ~~**Make weather access resilient.**~~ Done: grid-cell caching with request coalescing, per-attempt timeouts and jittered retries, a circuit breaker, an outgoing call budget, and a stale-data policy (cached data up to `WEATHER_STALE_MAX` old is served with `stale: true`; otherwise `/api/risk` returns 503 with `Retry-After`). The notifier never alerts from stale data. Paid Open-Meteo plans are supported via `OPEN_METEO_API_KEY`. Originally: add caching by coordinate grid and time window, provider timeouts and retries with backoff, circuit breaking, and a stale-data policy. Open-Meteo and Nominatim usage must follow their service policies and rate limits.
 7. **Calibrate the risk model.** The terrain factor is a placeholder and the score has no regional validation. Do not present it as an official warning until it is evaluated against observed events and reviewed by domain experts.
 8. **Add tests and CI.** Cover score edge cases, malformed API inputs, database failures, Open-Meteo decoding, handler responses, and frontend builds. Run formatting, static analysis, tests, and dependency checks on every pull request.

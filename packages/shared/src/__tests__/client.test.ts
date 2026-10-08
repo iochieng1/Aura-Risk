@@ -28,6 +28,16 @@ describe('createApiClient', () => {
     await expect(client.getRisk({ lat: 0, lon: 0 })).rejects.toEqual(new ApiError(400, 'invalid lat'));
   });
 
+  it('keeps the error code, request ID and Retry-After', async () => {
+    const response = {
+      ...json({ error: 'too many requests, slow down', code: 'too_many_requests', request_id: 'abc123' }, 429),
+      headers: new Headers({ 'Retry-After': '12' }),
+    } as Response;
+    const client = createApiClient({ baseUrl: '', fetch: async () => response });
+    const err = await client.getRisk({ lat: 0, lon: 0 }).catch((e: ApiError) => e);
+    expect(err).toMatchObject({ status: 429, code: 'too_many_requests', requestId: 'abc123', retryAfter: 12 });
+  });
+
   it('rejects a risk body that does not match the contract', async () => {
     const client = createApiClient({ baseUrl: '', fetch: async () => json({ score: 1, risk_level: 'x' }) });
     await expect(client.getRisk({ lat: 0, lon: 0 })).rejects.toBeInstanceOf(MalformedResponseError);
