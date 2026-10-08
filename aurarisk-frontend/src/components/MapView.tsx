@@ -1,5 +1,10 @@
 import { useEffect, useRef } from "react";
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+// MapLibre v6 locates its worker relative to its own module, which Vite moves
+// (dev pre-bundling and production chunks), so point it at the file directly.
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 import type { Location, RiskAssessment, CommunityReport } from "../types";
 import { RISK_CONFIG } from "../utils/risk";
 
@@ -112,14 +117,7 @@ export default function MapView({ center, risk, reports }: Props) {
 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([r.location.lon, r.location.lat])
-        .setPopup(
-          new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(
-            `<div style="font-size:12px;max-width:200px">
-              <strong>${r.category.replace("_", " ")}</strong><br/>
-              ${r.note}
-            </div>`
-          )
-        )
+        .setPopup(new maplibregl.Popup({ offset: 25, closeButton: false }).setDOMContent(reportPopup(r)))
         .addTo(map);
 
       markersRef.current.push(marker);
@@ -127,4 +125,18 @@ export default function MapView({ center, risk, reports }: Props) {
   }, [reports]);
 
   return <div ref={containerRef} className="w-full h-full" />;
+}
+
+// Report notes are user-submitted, so the popup is built with textContent
+// rather than HTML: a note can never inject markup or script.
+function reportPopup(r: CommunityReport): HTMLElement {
+  const box = document.createElement("div");
+  box.style.fontSize = "12px";
+  box.style.maxWidth = "200px";
+  const title = document.createElement("strong");
+  title.textContent = r.category.replace("_", " ");
+  const note = document.createElement("div");
+  note.textContent = r.note;
+  box.append(title, note);
+  return box;
 }
