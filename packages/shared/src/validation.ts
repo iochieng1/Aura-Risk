@@ -95,9 +95,24 @@ export function isRiskAssessment(v: unknown): v is RiskAssessment {
     isRiskLevel(v.level) &&
     typeof v.summary === 'string' &&
     Array.isArray(v.tips) &&
-    v.tips.every((t) => typeof t === 'string')
+    v.tips.every((t) => typeof t === 'string') &&
+    (v.stale === undefined || typeof v.stale === 'boolean') &&
+    (v.source_timestamps === undefined || isSourceTimestamps(v.source_timestamps)) &&
+    (v.confidence === undefined || isConfidence(v.confidence)) &&
+    (v.model_version === undefined || typeof v.model_version === 'string')
   );
 }
+
+const isSourceTimestamps = (v: unknown): boolean =>
+  isRecord(v) &&
+  typeof v.weather_fetched_at === 'string' &&
+  (v.weather_observed_at === undefined || typeof v.weather_observed_at === 'string');
+
+const isConfidence = (v: unknown): boolean =>
+  isRecord(v) &&
+  (v.level === 'low' || v.level === 'medium' || v.level === 'high') &&
+  Array.isArray(v.reasons) &&
+  v.reasons.every((r) => typeof r === 'string');
 
 export function isCommunityReport(v: unknown): v is CommunityReport {
   return (

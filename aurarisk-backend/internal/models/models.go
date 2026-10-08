@@ -18,6 +18,17 @@ type RiskAssessment struct {
 	// SourceTimestamps) was used instead.
 	Stale            bool              `json:"stale"`
 	SourceTimestamps *SourceTimestamps `json:"source_timestamps,omitempty"`
+	// How far the inputs can be trusted; see services.AssessConfidence.
+	Confidence *Confidence `json:"confidence,omitempty"`
+	// Scoring logic that produced Score; see services.ModelVersion.
+	ModelVersion string `json:"model_version,omitempty"`
+}
+
+type Confidence struct {
+	// low, medium, or high.
+	Level string `json:"level"`
+	// Why the level is not higher, in plain language.
+	Reasons []string `json:"reasons"`
 }
 
 type SourceTimestamps struct {

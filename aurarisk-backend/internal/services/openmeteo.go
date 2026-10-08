@@ -13,7 +13,14 @@ import (
 	"aurarisk-backend/internal/metrics"
 )
 
-const historicalDays = 7
+// historicalDays of hourly history are requested: the score's longest
+// antecedent-rain window (7 days) needs all of them. forecastDays covers the
+// score's forecast window (forecastHours ahead) even late in the local day,
+// since Open-Meteo forecast days end at local midnight.
+const (
+	historicalDays = 7
+	forecastDays   = 2
+)
 
 const (
 	// Free API, non-commercial use only (https://open-meteo.com/en/terms).
@@ -66,7 +73,8 @@ func (c *OpenMeteoClient) endpoint() string {
 	}
 }
 
-// Fetch returns current conditions, 7 days of history, and today's forecast.
+// Fetch returns current conditions, historicalDays of hourly history, and
+// forecastDays of hourly forecast.
 func (c *OpenMeteoClient) Fetch(ctx context.Context, lat, lon float64) (*OpenMeteoResponse, error) {
 	attempts := c.Attempts
 	if attempts <= 0 {
@@ -112,7 +120,7 @@ func (c *OpenMeteoClient) fetchOnce(ctx context.Context, lat, lon float64) (_ *O
 	q.Set("latitude", fmt.Sprintf("%.6f", lat))
 	q.Set("longitude", fmt.Sprintf("%.6f", lon))
 	q.Set("past_days", fmt.Sprint(historicalDays))
-	q.Set("forecast_days", "1")
+	q.Set("forecast_days", fmt.Sprint(forecastDays))
 	q.Set("current", "temperature_2m,relative_humidity_2m,precipitation,rain,weather_code")
 	q.Set("hourly", "precipitation,rain,soil_moisture_0_to_7cm")
 	q.Set("timezone", "auto")
