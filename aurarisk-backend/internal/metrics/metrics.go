@@ -226,3 +226,13 @@ func SetCircuitOpen(provider string, open bool) {
 	}
 	circuitOpen.WithLabelValues(provider).Set(v)
 }
+
+var rateLimited = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "aurarisk_rate_limited_total",
+	Help: "Requests rejected with 429 by the per-client rate limiter, by limiter.",
+}, []string{"limiter"})
+
+// ObserveRateLimited counts a request rejected by the named rate limiter.
+func ObserveRateLimited(limiter string) {
+	rateLimited.WithLabelValues(limiter).Inc()
+}

@@ -15,7 +15,13 @@ export interface ApiClientOptions {
 export class ApiError extends Error {
   constructor(
     readonly status: number,
-    message: string
+    message: string,
+    /** Machine-readable code from the backend, e.g. "not_found", "too_many_requests". */
+    readonly code?: string,
+    /** Quote this when reporting a problem; it finds the request in backend logs. */
+    readonly requestId?: string,
+    /** Seconds the backend asked to wait (Retry-After) on 429 and 503. */
+    readonly retryAfter?: number
   ) {
     super(message);
     this.name = 'ApiError';
@@ -52,13 +58,18 @@ export interface ApiClient {
 
 const readError = async (response: Response): Promise<ApiError> => {
   let message = `Request failed (${response.status})`;
+  let code: string | undefined;
+  let requestId = response.headers?.get('X-Request-ID') ?? undefined;
   try {
     const body = await response.json();
     if (body && typeof body.error === 'string') message = body.error;
+    if (body && typeof body.code === 'string') code = body.code;
+    if (body && typeof body.request_id === 'string') requestId = body.request_id;
   } catch {
     // Non-JSON error body; keep the generic message.
   }
-  return new ApiError(response.status, message);
+  const retryAfter = Number(response.headers?.get('Retry-After'));
+  return new ApiError(response.status, message, code, requestId, retryAfter > 0 ? retryAfter : undefined);
 };
 
 export function createApiClient({ baseUrl, fetch: fetchImpl }: ApiClientOptions): ApiClient {

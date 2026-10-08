@@ -13,19 +13,19 @@ func GetRisk(c *gin.Context) {
 	lonStr := c.Query("lon")
 
 	if latStr == "" || lonStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "lat and lon are required"})
+		respondError(c, http.StatusBadRequest, "lat and lon are required")
 		return
 	}
 
 	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid lat"})
+		respondError(c, http.StatusBadRequest, "invalid lat")
 		return
 	}
 
 	lon, err := strconv.ParseFloat(lonStr, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid lon"})
+		respondError(c, http.StatusBadRequest, "invalid lon")
 		return
 	}
 
@@ -34,7 +34,7 @@ func GetRisk(c *gin.Context) {
 	risk, err := services.GenerateRiskAssessment(c.Request.Context(), lat, lon, locationName)
 	if errors.Is(err, services.ErrWeatherUnavailable) {
 		c.Header("Retry-After", "60")
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		respondError(c, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 	if err != nil {

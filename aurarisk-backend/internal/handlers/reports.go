@@ -34,25 +34,25 @@ func GetReports(c *gin.Context) {
 	radiusStr := c.DefaultQuery("radius", "10")
 
 	if latStr == "" || lonStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "lat and lon are required"})
+		respondError(c, http.StatusBadRequest, "lat and lon are required")
 		return
 	}
 
 	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid lat"})
+		respondError(c, http.StatusBadRequest, "invalid lat")
 		return
 	}
 
 	lon, err := strconv.ParseFloat(lonStr, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid lon"})
+		respondError(c, http.StatusBadRequest, "invalid lon")
 		return
 	}
 
 	radius, err := strconv.ParseFloat(radiusStr, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid radius"})
+		respondError(c, http.StatusBadRequest, "invalid radius")
 		return
 	}
 
@@ -84,7 +84,7 @@ func GetReports(c *gin.Context) {
 		pq.Array(statuses),
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	defer rows.Close()
@@ -103,7 +103,7 @@ func GetReports(c *gin.Context) {
 			&r.Status,
 			&r.Corroborations,
 		); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		reports = append(reports, r)
@@ -135,12 +135,12 @@ func GetReports(c *gin.Context) {
 func CreateReport(c *gin.Context) {
 	var req CreateReportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		badRequestBody(c, err)
 		return
 	}
 
 	if req.Location.Name == "" || req.Category == "" || req.Note == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "location, category, and note are required"})
+		respondError(c, http.StatusBadRequest, "location, category, and note are required")
 		return
 	}
 
@@ -152,17 +152,17 @@ func CreateReport(c *gin.Context) {
 	}
 
 	if !validCategories[req.Category] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid category"})
+		respondError(c, http.StatusBadRequest, "invalid category")
 		return
 	}
 
 	if req.Location.Lat < -90 || req.Location.Lat > 90 || req.Location.Lon < -180 || req.Location.Lon > 180 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coordinates"})
+		respondError(c, http.StatusBadRequest, "invalid coordinates")
 		return
 	}
 
 	if len(req.Location.Name) > 200 || len(req.Note) > 2000 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "location name or note is too long"})
+		respondError(c, http.StatusBadRequest, "location name or note is too long")
 		return
 	}
 

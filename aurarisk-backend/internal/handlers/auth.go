@@ -73,15 +73,15 @@ func issueTokens(tx *sql.Tx, accountID, deviceID string) (*TokenPair, error) {
 func RegisterDevice(c *gin.Context) {
 	var req registerDeviceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		badRequestBody(c, err)
 		return
 	}
 	if !validPlatforms[req.Platform] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "platform must be ios, android, or web"})
+		respondError(c, http.StatusBadRequest, "platform must be ios, android, or web")
 		return
 	}
 	if len(req.AppVersion) > 32 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "app_version is too long"})
+		respondError(c, http.StatusBadRequest, "app_version is too long")
 		return
 	}
 
@@ -125,7 +125,7 @@ func RegisterDevice(c *gin.Context) {
 func RefreshTokens(c *gin.Context) {
 	var req refreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.RefreshToken == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "refresh_token is required"})
+		respondError(c, http.StatusBadRequest, "refresh_token is required")
 		return
 	}
 
@@ -312,10 +312,5 @@ func OptionalAuth() gin.HandlerFunc {
 
 func unauthorized(c *gin.Context, message string) {
 	c.Header("WWW-Authenticate", `Bearer realm="aurarisk"`)
-	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": message})
-}
-
-func internalError(c *gin.Context, err error) {
-	log.Printf("❌ %s %s: %v", c.Request.Method, c.FullPath(), err)
-	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+	respondError(c, http.StatusUnauthorized, message)
 }

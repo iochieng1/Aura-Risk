@@ -4,28 +4,38 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"aurarisk-backend/internal/models"
 )
 
+// ModelVersion identifies the scoring logic in every assessment. Bump it
+// whenever the score's inputs, weights, or thresholds change, so stored or
+// compared assessments can be told apart.
+const ModelVersion = "heuristic-1"
+
+// forecastHours is how far ahead the score looks. openmeteo.go requests
+// enough forecast days that these hours always exist.
+const forecastHours = 6
+
 func CalculateRiskScore(lat, lon float64, weather *OpenMeteoResponse) int {
+	precip := weather.Hourly.Precipitation
+	// Hourly precipitation is the total for the hour ending at that time, so
+	// index now covers the last hour and now+1.. are the hours ahead.
+	now, _ := currentHourIndex(weather)
+
 	baseScore := weather.Current.Precipitation * 10
 
 	forecastScore := 0.0
-	hoursToCheck := 6
-	if len(weather.Hourly.Precipitation) < hoursToCheck {
-		hoursToCheck = len(weather.Hourly.Precipitation)
-	}
-	for i := 0; i < hoursToCheck; i++ {
-		forecastScore += weather.Hourly.Precipitation[i] * 5
+	for _, value := range hoursAfter(precip, now, forecastHours) {
+		forecastScore += value * 5
 	}
 
-	currentIndex := findCurrentHourIndex(weather)
-	antecedent48h := sumPreviousHours(weather.Hourly.Precipitation, currentIndex, 48)
-	antecedent7d := sumPreviousHours(weather.Hourly.Precipitation, currentIndex, historicalDays*24)
+	antecedent48h := sumPreviousHours(precip, now+1, 48)
+	antecedent7d := sumPreviousHours(precip, now+1, historicalDays*24)
 	antecedentRainScore := math.Min(20, antecedent48h/50*20) + math.Min(15, antecedent7d/150*15)
-	soilMoistureScore := soilMoistureRiskScore(weather.Hourly.SoilMoisture, currentIndex)
+	soilMoistureScore := soilMoistureRiskScore(weather.Hourly.SoilMoisture, now+1)
 
 	terrainFactor := math.Abs(math.Sin(lat*100)*math.Cos(lon*100)) * 20
 
@@ -45,44 +55,54 @@ func CalculateRiskScore(lat, lon float64, weather *OpenMeteoResponse) int {
 	return score
 }
 
-func findCurrentHourIndex(weather *OpenMeteoResponse) int {
-	if len(weather.Hourly.Precipitation) > historicalDays*24 {
-		return historicalDays * 24
+// currentHourIndex returns the index in the hourly series of the hour that
+// contains current.time (both are local time). When it cannot be matched it
+// assumes the series starts historicalDays before now and reports false.
+func currentHourIndex(weather *OpenMeteoResponse) (int, bool) {
+	if len(weather.Current.Time) >= 13 {
+		hour := weather.Current.Time[:13] // "2006-01-02T15"
+		for i, t := range weather.Hourly.Time {
+			if strings.HasPrefix(t, hour) {
+				return i, true
+			}
+		}
 	}
-
-	return len(weather.Hourly.Precipitation)
+	return min(historicalDays*24, len(weather.Hourly.Precipitation)), false
 }
 
-func sumPreviousHours(values []float64, currentIndex, hours int) float64 {
-	start := currentIndex - hours
-	if start < 0 {
-		start = 0
-	}
-	if currentIndex > len(values) {
-		currentIndex = len(values)
-	}
+// hoursAfter returns up to n values following index.
+func hoursAfter(values []float64, index, n int) []float64 {
+	start := min(index+1, len(values))
+	return values[start:min(start+n, len(values))]
+}
+
+// sumPreviousHours sums up to hours values ending just before end.
+func sumPreviousHours(values []float64, end, hours int) float64 {
+	start := max(end-hours, 0)
+	end = min(end, len(values))
 
 	total := 0.0
-	for _, value := range values[start:currentIndex] {
+	for _, value := range values[start:end] {
 		total += value
 	}
 	return total
 }
 
-func soilMoistureRiskScore(values []float64, currentIndex int) float64 {
-	if len(values) == 0 {
-		return 0
-	}
-	if currentIndex > len(values) {
-		currentIndex = len(values)
-	}
-
-	for index := currentIndex - 1; index >= 0; index-- {
-		if values[index] > 0 {
-			return math.Min(20, values[index]/0.40*20)
-		}
+// soilMoistureRiskScore scores the latest positive reading before end.
+func soilMoistureRiskScore(values []float64, end int) float64 {
+	if i := latestPositive(values, end); i >= 0 {
+		return math.Min(20, values[i]/0.40*20)
 	}
 	return 0
+}
+
+func latestPositive(values []float64, end int) int {
+	for i := min(end, len(values)) - 1; i >= 0; i-- {
+		if values[i] > 0 {
+			return i
+		}
+	}
+	return -1
 }
 
 func ScoreToLevel(score int) string {
@@ -134,6 +154,12 @@ func SetWeatherService(s *WeatherService) {
 	weatherService = s
 }
 
+// WeatherCircuitOpen reports whether weather calls are suspended after
+// repeated provider failures (risk lookups fall back to cached data).
+func WeatherCircuitOpen() bool {
+	return weatherService.CircuitOpen()
+}
+
 // GenerateRiskAssessment scores flood risk at a point. When the weather
 // provider is failing it may use cached data, in which case the result is
 // marked Stale. It returns ErrWeatherUnavailable when there is nothing to use.
@@ -168,6 +194,8 @@ func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName 
 			WeatherFetchedAt:  w.FetchedAt.UTC(),
 			WeatherObservedAt: observedAt(weather),
 		},
+		Confidence:   AssessConfidence(weather, w.Stale, time.Now()),
+		ModelVersion: ModelVersion,
 	}, nil
 }
 

@@ -26,7 +26,7 @@ tests:
               component: weather
             exp_annotations:
               summary: "100% of Open-Meteo calls are failing"
-              description: "Risk lookups return 500 and the notifier cannot assess subscriptions while Open-Meteo fails."
+              description: "Risk lookups fall back to stale cached data or 503, and the notifier cannot assess subscriptions while Open-Meteo fails."
               runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskweatherproviderfailing"
 
   - name: Stale weather pages only while weather is being requested
@@ -50,7 +50,7 @@ tests:
               component: weather
             exp_annotations:
               summary: "No successful weather fetch for 40m 0s"
-              description: "Weather is being requested but every call fails, so /api/risk returns errors and the notifier cannot evaluate subscriptions."
+              description: "Weather is being requested but every call fails, so /api/risk serves stale data or 503 and the notifier cannot evaluate subscriptions."
               runbook_url: "https://github.com/iochieng1/Aura-Risk/blob/main/docs/ON_CALL.md#aurariskweatherdatastale"
 
   - name: Idle server is not stale

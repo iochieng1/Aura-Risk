@@ -18,15 +18,15 @@ type pushRegistrationRequest struct {
 func RegisterPushToken(c *gin.Context) {
 	var req pushRegistrationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		badRequestBody(c, err)
 		return
 	}
 	if req.Consent == nil || !*req.Consent {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "explicit consent is required to enable push notifications"})
+		respondError(c, http.StatusBadRequest, "explicit consent is required to enable push notifications")
 		return
 	}
 	if !services.IsExpoPushToken(req.PushToken) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "push_token must be an Expo push token"})
+		respondError(c, http.StatusBadRequest, "push_token must be an Expo push token")
 		return
 	}
 

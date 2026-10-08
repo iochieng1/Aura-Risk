@@ -114,11 +114,11 @@ func ListSubscriptions(c *gin.Context) {
 func CreateSubscription(c *gin.Context) {
 	var in subscriptionInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		badRequestBody(c, err)
 		return
 	}
 	if msg := in.validate(); msg != "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		respondError(c, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -137,7 +137,7 @@ func CreateSubscription(c *gin.Context) {
 
 	s, err := scanSubscription(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusConflict, gin.H{"error": "subscription limit reached"})
+		respondError(c, http.StatusConflict, "subscription limit reached")
 		return
 	}
 	if err != nil {
@@ -150,17 +150,17 @@ func CreateSubscription(c *gin.Context) {
 func UpdateSubscription(c *gin.Context) {
 	id := c.Param("id")
 	if !uuidPattern.MatchString(id) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+		respondError(c, http.StatusNotFound, "subscription not found")
 		return
 	}
 
 	var in subscriptionInput
 	if err := c.ShouldBindJSON(&in); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		badRequestBody(c, err)
 		return
 	}
 	if msg := in.validate(); msg != "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		respondError(c, http.StatusBadRequest, msg)
 		return
 	}
 
@@ -180,7 +180,7 @@ func UpdateSubscription(c *gin.Context) {
 
 	s, err := scanSubscription(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+		respondError(c, http.StatusNotFound, "subscription not found")
 		return
 	}
 	if err != nil {
@@ -193,7 +193,7 @@ func UpdateSubscription(c *gin.Context) {
 func DeleteSubscription(c *gin.Context) {
 	id := c.Param("id")
 	if !uuidPattern.MatchString(id) {
-		c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+		respondError(c, http.StatusNotFound, "subscription not found")
 		return
 	}
 
@@ -203,7 +203,7 @@ func DeleteSubscription(c *gin.Context) {
 		return
 	}
 	if n, _ := result.RowsAffected(); n == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
+		respondError(c, http.StatusNotFound, "subscription not found")
 		return
 	}
 	c.Status(http.StatusNoContent)

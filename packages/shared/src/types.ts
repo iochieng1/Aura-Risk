@@ -15,12 +15,34 @@ export interface Location extends Coordinates {
   name: string;
 }
 
+export type ConfidenceLevel = 'low' | 'medium' | 'high';
+
+export interface RiskConfidence {
+  /** Trust in the inputs and model, not a probability that the score is right. */
+  level: ConfidenceLevel;
+  /** Plain-language reasons the level is not higher. */
+  reasons: string[];
+}
+
+export interface RiskSourceTimestamps {
+  /** ISO 8601: when the backend retrieved the weather data. */
+  weather_fetched_at: string;
+  /** ISO 8601: when the provider's current conditions were valid. */
+  weather_observed_at?: string;
+}
+
 export interface RiskAssessment {
   location: Location;
   score: number;
   level: RiskLevel;
   summary: string;
   tips: string[];
+  /** True when live weather was unavailable and cached data was used. Absent from older backends. */
+  stale?: boolean;
+  source_timestamps?: RiskSourceTimestamps;
+  confidence?: RiskConfidence;
+  /** Scoring logic that produced the score, e.g. "heuristic-1". */
+  model_version?: string;
 }
 
 export type ReportCategory = 'flooding' | 'road_blocked' | 'water_rising' | 'drainage_issue';

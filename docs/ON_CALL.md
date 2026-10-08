@@ -115,6 +115,7 @@ In production:
 | `aurarisk_weather_observation_age_seconds` | Age of Open-Meteo's current conditions when fetched |
 | `aurarisk_weather_lookups_total{result}` | Weather lookups: `hit`, `fetched`, `stale`, `throttled`, `unavailable` |
 | `aurarisk_provider_circuit_open{provider}` | 1 while Open-Meteo calls are suspended after repeated failures |
+| `aurarisk_rate_limited_total{limiter}` | Requests rejected with 429 (`api`, `writes`) |
 | `aurarisk_push_tickets_total{status}` | Per-message Expo results: `ok`, `device_gone`, `error` |
 | `aurarisk_worker_last_success_timestamp_seconds{worker}` | Last successful notifier / photo processor / report verifier / retention run |
 | `aurarisk_moderation_queue_reports` | Pending reports awaiting verification or review |
