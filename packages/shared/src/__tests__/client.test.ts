@@ -33,6 +33,21 @@ describe('createApiClient', () => {
     await expect(client.getRisk({ lat: 0, lon: 0 })).rejects.toBeInstanceOf(MalformedResponseError);
   });
 
+  it('accepts assessment metadata and rejects a malformed confidence', async () => {
+    const withMeta = {
+      ...risk,
+      stale: false,
+      source_timestamps: { weather_fetched_at: '2026-10-07T12:00:00Z' },
+      confidence: { level: 'medium', reasons: ['Not yet validated.'] },
+      model_version: 'heuristic-1',
+    };
+    const ok = createApiClient({ baseUrl: '', fetch: async () => json(withMeta) });
+    expect((await ok.getRisk({ lat: 0, lon: 0 })).confidence?.level).toBe('medium');
+
+    const bad = createApiClient({ baseUrl: '', fetch: async () => json({ ...withMeta, confidence: { level: 'certain' } }) });
+    await expect(bad.getRisk({ lat: 0, lon: 0 })).rejects.toBeInstanceOf(MalformedResponseError);
+  });
+
   it('validates a report before sending it', async () => {
     const fetch = jest.fn();
     const client = createApiClient({ baseUrl: '', fetch });

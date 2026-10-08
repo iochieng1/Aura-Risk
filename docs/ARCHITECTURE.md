@@ -31,16 +31,30 @@ The current implementation is a prototype. The web frontend calls the Go backend
 The current score is heuristic, not a calibrated flood model. It includes:
 
 - Current precipitation multiplied by 10.
-- The next six forecast precipitation values multiplied by 5.
-- Preceding 48-hour rainfall, capped at 20 points.
-- Preceding seven-day rainfall, capped at 15 points.
-- Recent 0-7 cm soil moisture, capped at 20 points.
+- Precipitation forecast for the next six hours multiplied by 5.
+- Rainfall in the preceding 48 hours, capped at 20 points.
+- Rainfall in the preceding seven days, capped at 15 points.
+- The latest 0-7 cm soil moisture reading, capped at 20 points.
 - Current weather-code severity.
 - A temporary coordinate-based terrain factor.
 
-The Open-Meteo history window is controlled by `historicalDays` in `aurarisk-backend/internal/services/openmeteo.go`. Keep that value synchronized with the scoring assumptions if changing it. The current default is seven days, giving 168 historical hourly values plus one forecast day.
+### Time alignment
 
-For a production flood warning, replace or calibrate the heuristic with local rainfall gauges, stream or river levels, elevation and drainage data, soil type, land cover, basin boundaries, and historical flood labels. Validate thresholds separately for each region and publish the model version with every assessment.
+Open-Meteo returns one hourly series (local time, `timezone=auto`) running from `historicalDays` (7) days before the start of today to the end of the last of `forecastDays` (2) forecast days, both set in `aurarisk-backend/internal/services/openmeteo.go`. Each hourly precipitation value is the total for the hour *ending* at that time.
+
+The scorer finds the current hour by matching `current.time` (for example `2026-10-07T15:15`) to the `15:00` entry in `hourly.time`. That entry and the ones before it are history: the 48-hour and 7-day rainfall windows end there, and soil moisture is the latest reading up to it. The six entries after it are the forecast window. Two forecast days are requested so that six hours ahead exist even late in the local day.
+
+If `historicalDays` drops below seven, the 7-day window is cut short and confidence drops to `low`. Changing either constant, or any weight, changes scores: bump `ModelVersion` in `internal/services/risk.go`.
+
+### Model version and confidence
+
+Every assessment includes:
+
+- `model_version`: the scoring logic that produced it (currently `heuristic-1`). Bump it whenever inputs, weights, or thresholds change.
+- `confidence`: `{level, reasons}`, rating the inputs and the model, not the chance that the score is right (`internal/services/confidence.go`). It is `low` when weather is stale, current conditions are over two hours old or have no timestamp, the current hour cannot be found in the hourly series, history or forecast hours are missing, or there is no soil moisture reading. Otherwise it is `medium`. It stays capped at `medium` until the model is calibrated (#22). `reasons` explains each downgrade in plain language.
+- `stale` and `source_timestamps` (`weather_fetched_at`, `weather_observed_at`): see [Current API](#current-api).
+
+For a production flood warning, replace or calibrate the heuristic with local rainfall gauges, stream or river levels, elevation and drainage data, soil type, land cover, basin boundaries, and historical flood labels. Validate thresholds separately for each region, and bump `model_version` when you do.
 
 ## Running locally
 
@@ -93,6 +107,18 @@ Build for production with `npm run build`.
 
 - `GET /health`: liveness-style health response.
 - `GET /api/risk?lat=<lat>&lon=<lon>`: weather-based risk assessment.
+  `stale: true` means Open-Meteo was failing and cached weather (up to `WEATHER_STALE_MAX` old) was used; with nothing usable the endpoint returns 503 with `Retry-After`. Example:
+
+  ```json
+  {
+    "location": { "name": "Selected Location", "lat": -1.29, "lon": 36.82 },
+    "score": 42, "level": "Advisory", "summary": "…", "tips": ["…"],
+    "stale": false,
+    "source_timestamps": { "weather_fetched_at": "2026-10-07T12:01:05Z", "weather_observed_at": "2026-10-07T12:00:00Z" },
+    "confidence": { "level": "medium", "reasons": ["The score is a heuristic that has not yet been validated against observed floods."] },
+    "model_version": "heuristic-1"
+  }
+  ```
 - `GET /api/reports?lat=<lat>&lon=<lon>&radius=<km>`: up to 50 nearby reports.
 - `POST /api/reports`: creates a community report.
 
@@ -120,7 +146,7 @@ The app is suitable for a development demo or pilot, but it should not yet be us
 
 - ~~Add Prometheus-compatible metrics.~~ Done (see [ON_CALL.md](ON_CALL.md)). Still to do: centralized logs with correlation IDs.
 - Expose data freshness in the UI. Provider response age is now tracked as `aurarisk_weather_observation_age_seconds`.
-- Return confidence and model version with risk assessments. (Weather source timestamps are now returned as `source_timestamps`.)
+- ~~Return confidence, source timestamps, and model version with risk assessments.~~ Done: see [Model version and confidence](#model-version-and-confidence).
 - Use PostGIS or a geospatial index for accurate radius searches instead of a latitude/longitude bounding box.
 - ~~Add report verification, duplicate detection, moderation status, and retention policies.~~ Done: see [REPORT_CURATION.md](REPORT_CURATION.md).
 - Add accessible loading, empty, error, and offline states in the frontend.
