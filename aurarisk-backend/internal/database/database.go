@@ -148,6 +148,18 @@ func Migrate(db *sql.DB) {
 	CREATE INDEX IF NOT EXISTS idx_moderation_events_report ON report_moderation_events(report_id);
 
 	CREATE INDEX IF NOT EXISTS idx_report_photos_status_updated ON report_photos(status, updated_at);
+
+	-- Enforce report validation in the database too. NOT VALID skips checking
+	-- rows written before these constraints existed but applies to new rows.
+	ALTER TABLE community_reports
+		DROP CONSTRAINT IF EXISTS community_reports_lat_check,
+		DROP CONSTRAINT IF EXISTS community_reports_lon_check,
+		DROP CONSTRAINT IF EXISTS community_reports_category_check;
+	ALTER TABLE community_reports
+		ADD CONSTRAINT community_reports_lat_check CHECK (lat BETWEEN -90 AND 90) NOT VALID,
+		ADD CONSTRAINT community_reports_lon_check CHECK (lon BETWEEN -180 AND 180) NOT VALID,
+		ADD CONSTRAINT community_reports_category_check
+			CHECK (category IN ('flooding', 'road_blocked', 'water_rising', 'drainage_issue')) NOT VALID;
 `
 
 	if err := runLocked(db, migration); err != nil {
@@ -160,7 +172,7 @@ func Migrate(db *sql.DB) {
 const (
 	// schemaVersion must be bumped whenever the migration SQL above changes,
 	// or databases already at the old version will not pick up the change.
-	schemaVersion = 3
+	schemaVersion = 4
 	// migrationLockID is an arbitrary constant identifying the migration lock.
 	migrationLockID = 7_311_000
 )
