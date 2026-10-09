@@ -12,8 +12,8 @@ The current implementation is a prototype. The web frontend calls the Go backend
 - `aurarisk-backend/`: Go HTTP API using Gin and PostgreSQL.
 - `aurarisk-backend/internal/services/`: Open-Meteo integration and risk scoring.
 - `aurarisk-backend/internal/handlers/`: HTTP handlers for risk and reports.
-- `aurarisk-backend/internal/database/`: PostgreSQL connection and startup migration.
-- `migrations/`: SQL schema reference.
+- `aurarisk-backend/internal/database/`: PostgreSQL connection and migration runner.
+- `aurarisk-backend/migrations/`: versioned SQL migrations, embedded in the binary (see [Database migrations](#database-migrations)).
 - `docker-compose.yml`: local PostgreSQL service only.
 
 ## Request flow
@@ -145,12 +145,26 @@ Bodies over 64 KiB get 413. Each client IP gets `RATE_LIMIT_PER_MINUTE` (120) re
 
 The app is suitable for a development demo or pilot, but it should not yet be used as a safety-critical public warning system. It has a useful end-to-end product shape, but the prediction model, operational controls, security, observability, and deployment process need work.
 
+## Database migrations
+
+Schema changes live in `aurarisk-backend/migrations/` as `NNN_description.sql`, numbered from 001 with no gaps, and are embedded in the binary. Add a new file for each change. Never edit a migration that has already shipped.
+
+Migrations are a separate deployment step. Run them before starting the new version:
+
+```bash
+aurarisk-backend migrate   # or: go run . migrate
+```
+
+Each pending file runs in its own transaction under a Postgres advisory lock and is recorded in `schema_migrations`, so concurrent runs are safe and a failed migration leaves nothing half-applied. The server checks for pending migrations at startup and refuses to start if any are found. Set `AUTO_MIGRATE=true` to apply them at startup instead. That is meant for local development only.
+
+Databases created by the old startup migration have a `schema_version` table. Its version maps one-to-one onto files 001 to 004, and the first `migrate` run records those versions as applied without running them again.
+
 ### Launch blockers
 
 1. ~~**Use real frontend mode.**~~ Done: the web app calls the backend, the API origin is a build-time setting (`VITE_API_BASE_URL`), and mock data is development-only and excluded from production builds.
 2. ~~**Remove default secrets and credentials.**~~ Done: Compose and the backend no longer ship credentials, production startup fails on missing or development secrets, and secrets can come from mounted files or AWS Secrets Manager (see [Secrets and production configuration](#secrets-and-production-configuration)).
-3. **Secure report creation.** Add authentication or abuse controls, request size limits, strict latitude/longitude validation, note length limits, spam protection, moderation, and audit logging.
-4. **Add database migrations.** Run versioned migrations as a deployment step instead of embedding schema creation in application startup. Add constraints and indexes appropriate for geographic queries.
+3. ~~**Secure report creation.**~~ Done: per-IP write rate limits, optional device auth, strict category, size and coordinate validation (also enforced by database constraints), duplicate detection, moderation, and an audit log line for every created report. Originally: add authentication or abuse controls, request size limits, strict latitude/longitude validation, note length limits, spam protection, moderation, and audit logging.
+4. ~~**Add database migrations.**~~ Done: see [Database migrations](#database-migrations). Originally: run versioned migrations as a deployment step instead of embedding schema creation in application startup. Add constraints and indexes appropriate for geographic queries.
 5. ~~**Harden the API.**~~ Done: see [Errors, request IDs, and limits](#errors-request-ids-and-limits); CORS allowlist from launch blocker 1; graceful shutdown drains readiness, finishes requests, and waits for background workers. Originally: add structured error responses, request IDs, CORS allowlists, rate limiting, timeouts, graceful shutdown, and health checks that distinguish process health from database and provider health.
 6. ~~**Make weather access resilient.**~~ Done: grid-cell caching with request coalescing, per-attempt timeouts and jittered retries, a circuit breaker, an outgoing call budget, and a stale-data policy (cached data up to `WEATHER_STALE_MAX` old is served with `stale: true`; otherwise `/api/risk` returns 503 with `Retry-After`). The notifier never alerts from stale data. Paid Open-Meteo plans are supported via `OPEN_METEO_API_KEY`. Originally: add caching by coordinate grid and time window, provider timeouts and retries with backoff, circuit breaking, and a stale-data policy. Open-Meteo and Nominatim usage must follow their service policies and rate limits.
 7. **Calibrate the risk model.** The terrain factor is a placeholder and the score has no regional validation. Do not present it as an official warning until it is evaluated against observed events and reviewed by domain experts.

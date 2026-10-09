@@ -30,13 +30,16 @@ Edit `.env` and replace the `change-me-*` placeholders with your own local passw
 
 See [Secrets and production configuration](docs/ARCHITECTURE.md#secrets-and-production-configuration) for `APP_ENV=production`, mounted secret files, and AWS Secrets Manager.
 
-3. Run the backend:
+3. Apply database migrations, then run the backend:
 
 ```bash
 cd /workspaces/Aura-Risk/aurarisk-backend
 go mod tidy
+go run . migrate
 go run .
 ```
+
+The server refuses to start while migrations are pending. Run `go run . migrate` again after pulling schema changes, or set `AUTO_MIGRATE=true` in `.env` to apply them at startup. See [Database migrations](docs/ARCHITECTURE.md#database-migrations).
 
 4. Confirm the server is running:
 
@@ -67,7 +70,6 @@ The backend was verified to build and run successfully with the database availab
 
 ```text
 ✅ Database connected
-✅ Migrations complete
 🚀 AuraRisk backend running on port 8080
 ```
 
