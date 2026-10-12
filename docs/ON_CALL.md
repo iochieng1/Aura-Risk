@@ -67,14 +67,15 @@ even at low traffic.
 Locally:
 
 ```bash
-# In .env: METRICS_ADDR=:9464 so Prometheus (in Docker) can scrape the backend
+# In .env: METRICS_ADDR=:9464 so Prometheus (in Docker) can scrape the backend,
+# and LOG_FORMAT=json + LOG_FILE=../logs/backend.log so Alloy ships its logs
 docker compose --profile monitoring up -d
 cd aurarisk-backend && go run .
 ```
 
 | UI | URL |
 |---|---|
-| Grafana (dashboard) | http://localhost:3000 |
+| Grafana (dashboard, Explore → Loki for logs) | http://localhost:3000 |
 | Prometheus (queries, alert states) | http://localhost:9090/alerts |
 | Alertmanager (silences, routing) | http://localhost:9093 |
 
@@ -92,6 +93,10 @@ docker run --rm -v "$PWD/observability/prometheus:/p:ro" --entrypoint promtool \
 
 In production:
 
+- Logs are JSON by default (`LOG_FORMAT=json` when `APP_ENV=production`).
+  Write them to stderr and point Alloy at the platform's container logs
+  instead of `LOG_FILE`; the processing stages in
+  `observability/alloy/config.alloy` apply unchanged.
 - Bind `METRICS_ADDR` to a private interface (for example `10.0.0.5:9464`) and
   scrape every backend instance. Never expose it on the public load balancer.
 - Use the same `alerts.yml` and `alertmanager.yml`; mount the two secret files
@@ -99,6 +104,26 @@ In production:
 - Run Grafana with real authentication. The local Compose setup's anonymous
   access is for development only.
 - Keep `instances × DB_MAX_OPEN_CONNS` below Postgres `max_connections`.
+
+## Finding logs
+
+Every backend log line is JSON with a `level`, and request-scoped lines
+(access log, internal errors, panics, report audit) carry `request_id`. The
+same ID is returned to clients in the `X-Request-ID` header and in every
+error body, so a user report or a failed request can be traced to its logs.
+
+In Grafana → Explore → Loki:
+
+| Question | LogQL |
+|---|---|
+| Everything for one request | `{service="aurarisk-backend"} \| request_id="<id>"` |
+| Recent errors | `{service="aurarisk-backend", level="ERROR"}` |
+| 5xx responses on a route | `{service="aurarisk-backend"} \| json \| msg="request" \| status >= 500 \| route="/api/risk"` |
+| Panics with stack traces | `{service="aurarisk-backend"} \| json \| msg="panic recovered"` |
+
+`level` is an index label; `request_id` is structured metadata, so filtering
+on it is cheap without creating a stream per request. Logs are kept for 15
+days locally (`observability/loki/loki.yml`).
 
 ## Metrics reference
 
@@ -146,7 +171,8 @@ More than 5% of API requests are returning 5xx.
    then Explore: `sum by (route) (rate(aurarisk_http_requests_total{status=~"5.."}[5m]))`).
 2. `/api/risk` only: almost always Open-Meteo. Check
    [AuraRiskWeatherProviderFailing](#aurariskweatherproviderfailing).
-3. All routes: check the database panels and logs for SQL errors.
+3. All routes: check the database panels, and the error logs
+   (`{service="aurarisk-backend", level="ERROR"}`) for SQL errors.
 4. Started after a deploy: roll back.
 
 ### AuraRiskApiLatency

@@ -5,10 +5,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
+	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
+	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -76,7 +79,8 @@ func errorCode(status int) string {
 // internalError logs err with the request ID and returns a generic 500, so
 // internal details never reach the client but can be found from the ID.
 func internalError(c *gin.Context, err error) {
-	log.Printf("❌ [%s] %s %s: %v", GetRequestID(c), c.Request.Method, c.FullPath(), err)
+	slog.Error("internal error", "request_id", GetRequestID(c), "method", c.Request.Method,
+		"route", c.FullPath(), "error", err.Error())
 	respondError(c, http.StatusInternalServerError, "internal server error")
 }
 
@@ -91,10 +95,12 @@ func badRequestBody(c *gin.Context, err error) {
 	respondError(c, http.StatusBadRequest, "invalid request body")
 }
 
-// Recovery turns a panic into a logged, structured 500.
+// Recovery turns a panic into a logged, structured 500. The stack is kept in
+// one log record rather than gin's multi-line dump, so it ships as one entry.
 func Recovery() gin.HandlerFunc {
-	return gin.CustomRecoveryWithWriter(gin.DefaultErrorWriter, func(c *gin.Context, recovered any) {
-		log.Printf("❌ [%s] panic in %s %s: %v", GetRequestID(c), c.Request.Method, c.Request.URL.Path, recovered)
+	return gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, recovered any) {
+		slog.Error("panic recovered", "request_id", GetRequestID(c), "method", c.Request.Method,
+			"path", c.Request.URL.Path, "panic", fmt.Sprint(recovered), "stack", string(debug.Stack()))
 		respondError(c, http.StatusInternalServerError, "internal server error")
 	})
 }
@@ -108,11 +114,26 @@ func MethodNotAllowed(c *gin.Context) {
 	respondError(c, http.StatusMethodNotAllowed, "method not allowed")
 }
 
-// AccessLog is gin's request log with the request ID added.
+// AccessLog logs one structured record per request, keyed by request ID.
+// Server errors are logged at error level so they can be filtered on.
 func AccessLog() gin.HandlerFunc {
-	return gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
-		id, _ := p.Keys[requestIDKey].(string)
-		return fmt.Sprintf("[GIN] %s | %s | %3d | %13v | %15s | %-7s %s\n",
-			p.TimeStamp.Format("2006/01/02 - 15:04:05"), id, p.StatusCode, p.Latency, p.ClientIP, p.Method, p.Path)
-	})
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		status := c.Writer.Status()
+		level := slog.LevelInfo
+		if status >= http.StatusInternalServerError {
+			level = slog.LevelError
+		}
+		slog.LogAttrs(c.Request.Context(), level, "request",
+			slog.String("request_id", GetRequestID(c)),
+			slog.String("method", c.Request.Method),
+			slog.String("path", c.Request.URL.Path),
+			slog.String("route", c.FullPath()),
+			slog.Int("status", status),
+			slog.Float64("duration_ms", float64(time.Since(start).Microseconds())/1000),
+			slog.String("client_ip", c.ClientIP()),
+		)
+	}
 }

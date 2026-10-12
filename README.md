@@ -63,7 +63,7 @@ Expected response:
 
 ### Monitoring and on-call
 
-`docker compose --profile monitoring up -d` starts Prometheus, Alertmanager, Grafana (http://localhost:3000), and a Postgres exporter. Set `METRICS_ADDR=:9464` in `.env` so Prometheus can scrape the backend. Dashboards cover API latency, DB saturation, provider health, and weather data freshness. Alert rules, ownership, escalation, and runbooks are in [docs/ON_CALL.md](docs/ON_CALL.md).
+`docker compose --profile monitoring up -d` starts Prometheus, Alertmanager, Grafana (http://localhost:3000), a Postgres exporter, and Loki with Alloy for centralized logs. Set `METRICS_ADDR=:9464` in `.env` so Prometheus can scrape the backend, and `LOG_FORMAT=json` with `LOG_FILE=../logs/backend.log` so its logs reach Loki (searchable by `request_id` in Grafana → Explore). Dashboards cover API latency, DB saturation, provider health, and weather data freshness. Alert rules, ownership, escalation, and runbooks are in [docs/ON_CALL.md](docs/ON_CALL.md).
 
 ### Verified status
 The backend was verified to build and run successfully with the database available. The application logs show:

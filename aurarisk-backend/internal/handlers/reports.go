@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"database/sql"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -250,8 +250,8 @@ func auditReportCreated(c *gin.Context, reportID, accountID, category, duplicate
 	if duplicateOf == "" {
 		duplicateOf = "-"
 	}
-	log.Printf("📝 [%s] report created id=%s account=%s ip=%s category=%s duplicate_of=%s",
-		GetRequestID(c), reportID, accountID, c.ClientIP(), category, duplicateOf)
+	slog.Info("report created", "request_id", GetRequestID(c), "report_id", reportID,
+		"account", accountID, "client_ip", c.ClientIP(), "category", category, "duplicate_of", duplicateOf)
 }
 
 // findDuplicate looks for an earlier report that the new one repeats. Ages
