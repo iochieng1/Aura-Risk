@@ -6,7 +6,9 @@ AuraRisk is a climate-risk platform providing localized flood predictions, early
 
 > **Decision support only.** AuraRisk is not an official flood warning service, and its risk score is not yet calibrated against observed floods ([#22](https://github.com/iochieng1/Aura-Risk/issues/22)). Always follow local authorities.
 
-**Live demo:** _coming soon_ (web app and API on Render's free tier; the first request after a quiet period can take up to a minute while the server wakes up).
+**Live demo:** [aurarisk-web.onrender.com](https://aurarisk-web.onrender.com) · API health: [aurarisk-api.onrender.com/health/ready](https://aurarisk-api.onrender.com/health/ready)
+
+_Hosted on free tiers (Render + Neon): the first request after a quiet period can take up to a minute while the server wakes up._
 
 ## Highlights
 
