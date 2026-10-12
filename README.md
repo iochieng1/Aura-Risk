@@ -66,7 +66,7 @@ All issues: [open](https://github.com/iochieng1/Aura-Risk/issues) · [closed](ht
 This project includes a Go backend that exposes weather-risk and community-report APIs. The backend was verified to start successfully with PostgreSQL running locally.
 
 ### Prerequisites
-- Go 1.27+ (`go.mod` pins 1.27.1; with `GOTOOLCHAIN=auto`, the default, an older `go` downloads it)
+- Go 1.27+ (`go.mod` pins 1.27.2; with `GOTOOLCHAIN=auto`, the default, an older `go` downloads it)
 - Docker and Docker Compose
 - PostgreSQL (provided by the included Compose setup)
 

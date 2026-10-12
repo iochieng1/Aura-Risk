@@ -17,7 +17,7 @@ reflects the repository on 2026-10-12. Update it as issues close.
 
 | Issue | Priority | Assessment | Effort* | Blocks public launch? |
 |---|---|---|---|---|
-| [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | p0 | **~85% done.** CI runs on every PR; missing: required checks, database-failure tests, and a failing dependency scan | S | Yes (release gate) |
+| [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | p0 | **~90% done.** CI runs and passes on every PR; missing: required checks and database-failure tests | S | Yes (release gate) |
 | [#18 PostGIS](https://github.com/iochieng1/Aura-Risk/issues/18) | p1 | **Not started**, but well scoped. Also the foundation for #22's terrain data | M | Indirectly, through #22 |
 | [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | p0 | **Planned, not started.** The biggest and most important item | L | **Yes (release gate)** |
 | [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | p0 | **Partly done.** Free demo is live; production hosting, runbooks and restore drills are not | M–L | **Yes (release gates)** |
@@ -90,16 +90,9 @@ The connections, in words:
   handler errors.
 
 **Left:**
-1. **Dependency scan failing on `main`.**
-   - `govulncheck` reports 9 Go standard-library advisories affecting the
-     code, plus one in `golang.org/x/net` that the code doesn't call.
-   - The report lists **Go 1.27.2** and **`golang.org/x/net` v0.60.0** as
-     the fixes.
-   - This affects the **live demo too**, which is built with
-     `golang:1.27.1-alpine`.
-   - Fix: bump `go.mod`, the Dockerfile and the module.
-   - The job is "report only", which is why it was easy to ignore. Make it
-     blocking once it's green.
+1. ~~**Dependency scan failing on `main`.**~~ Fixed: Go 1.27.2 and
+   `golang.org/x/net` v0.60.0 resolve the 9 standard-library advisories
+   `govulncheck` reported. The scan is clean for the code's call paths again.
 2. **"Must pass on every PR".** Turn on branch protection for `main`,
    requiring the CI checks. This is a GitHub setting rather than code, and it
    needs the repo owner.
@@ -234,9 +227,9 @@ Found during this assessment. Each is worth an issue, so nothing is forgotten.
 
 | Item | Why it matters | Effort |
 |---|---|---|
-| **Upgrade to Go 1.27.2 and `x/net` v0.60.0** | Fixes the 9 standard-library advisories above, including in the **live** API | S |
-| **Merge [PR #45](https://github.com/iochieng1/Aura-Risk/pull/45)** (stored XSS fix in map popups, maplibre-gl v6) | A **security fix** open since 2026-10-08. It still merges cleanly into `main` and its CI passed | S |
-| **Open-Meteo attribution in the UI** | Open-Meteo data is CC BY 4.0 and must be credited; the map credits OpenStreetMap but not the weather data | S |
+| ~~Upgrade to Go 1.27.2 and `x/net` v0.60.0~~ | Done | — |
+| ~~Merge [PR #45](https://github.com/iochieng1/Aura-Risk/pull/45)~~ (stored XSS fix, maplibre-gl v6) | Done: merged after re-testing on current `main` | — |
+| ~~Open-Meteo attribution in the UI~~ | Done: the web and mobile risk views credit Open-Meteo (CC BY 4.0) | — |
 | **Check `client_ip` on Render** | Confirm `TRUSTED_PROXIES` applied, so visitors don't share one rate limit | S |
 | **Moderation on the demo** | `MODERATOR_TOKENS` is unset, so the moderation API is off and test reports can't be removed through the API | S |
 | **`GET /api/risk` range check** | Unlike `POST /api/risk`, it doesn't reject latitude/longitude outside ±90/±180 | S |
@@ -254,7 +247,7 @@ From [ARCHITECTURE.md](ARCHITECTURE.md#recommended-release-gates):
 | Validated model report per launch region | ❌ #22 |
 | No default production credentials | ✅ |
 | HTTPS and abuse-protected report submission | ✅ demo (Render HTTPS; rate limits, validation, moderation). Production: #27 |
-| Automated tests and CI passing | 🟡 CI runs; dependency scan failing, checks not required (#26) |
+| Automated tests and CI passing | 🟡 CI runs and passes; checks not yet required (#26) |
 | Database backup and restore verification | ❌ #27 |
 | Weather caching, timeout, fallback, freshness indicators | ✅ (#41, #49, #52) |
 | Monitoring dashboards and on-call ownership | 🟡 built and documented; not running for the demo (#27) |
@@ -265,7 +258,7 @@ From [ARCHITECTURE.md](ARCHITECTURE.md#recommended-release-gates):
 
 | Phase | Work | Why now |
 |---|---|---|
-| **0: quick wins** | Merge PR #45 · Go 1.27.2 upgrade · Open-Meteo attribution · check `client_ip` · branch protection | Security and licence fixes; each takes about an hour |
+| **0: quick wins** | ~~Merge PR #45~~ · ~~Go 1.27.2 upgrade~~ · ~~Open-Meteo attribution~~ · check `client_ip` · branch protection | Security and licence fixes; the first three are done |
 | **1: decide** | Choose the launch region | Shapes #22's data and #27's hosting |
 | **2: foundations** | #26 database-failure tests and web tests · #22 part 1 (real elevation + river discharge) | Removes the placeholder quickly; small and visible |
 | **3: spatial** | #18 PostGIS | Unlocks #22's static layers and fixes radius search |
