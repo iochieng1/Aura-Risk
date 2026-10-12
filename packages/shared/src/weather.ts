@@ -20,3 +20,14 @@ export function openMeteoForecastUrl({ lat, lon }: Coordinates): string {
   });
   return `${OPEN_METEO_FORECAST_URL}?${query}`;
 }
+
+/**
+ * Open-Meteo data is licensed CC BY 4.0, so every place that shows a risk
+ * assessment credits it.
+ */
+export const WEATHER_ATTRIBUTION = {
+  label: 'Weather data by Open-Meteo.com',
+  url: 'https://open-meteo.com/',
+  licence: 'CC BY 4.0',
+  licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+} as const;

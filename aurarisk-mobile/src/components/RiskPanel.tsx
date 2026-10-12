@@ -5,9 +5,10 @@ import {
   type Location,
   REPORT_CATEGORIES,
   RISK_LEVEL_COLORS,
+  WEATHER_ATTRIBUTION,
 } from '@aurarisk/shared';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 import { fetchNearbyReports, fetchRiskAssessment, RiskFetchResult } from '../services/api';
 
 const MAX_REPORTS_SHOWN = 5;
@@ -72,6 +73,13 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
               {freshness.outdated ? '. Conditions may have changed.' : ''}
             </Text>
           )}
+          <Text
+            style={styles.meta}
+            accessibilityRole="link"
+            onPress={() => Linking.openURL(WEATHER_ATTRIBUTION.url)}
+          >
+            {WEATHER_ATTRIBUTION.label} ({WEATHER_ATTRIBUTION.licence})
+          </Text>
         </View>
       ) : (
         !risk?.isOffline && <Text style={styles.error}>Could not load flood risk for this place.</Text>

@@ -1,4 +1,4 @@
-import { describeFreshness } from "@aurarisk/shared";
+import { describeFreshness, WEATHER_ATTRIBUTION } from "@aurarisk/shared";
 import type { RiskAssessment } from "../types";
 import StatusBadge from "./StatusBadge";
 import { RISK_CONFIG } from "../utils/risk";
@@ -58,6 +58,17 @@ export default function RiskCard({ risk }: { risk: RiskAssessment }) {
           )}
         </details>
       )}
+
+      <p className="mt-3 text-[11px] text-gray-600">
+        <a href={WEATHER_ATTRIBUTION.url} target="_blank" rel="noreferrer" className="underline">
+          {WEATHER_ATTRIBUTION.label}
+        </a>{" "}
+        (
+        <a href={WEATHER_ATTRIBUTION.licenceUrl} target="_blank" rel="noreferrer" className="underline">
+          {WEATHER_ATTRIBUTION.licence}
+        </a>
+        )
+      </p>
     </section>
   );
 }
