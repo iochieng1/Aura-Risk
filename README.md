@@ -60,6 +60,8 @@ Expected response:
 - POST `/api/reports` — create a new report
 - Report moderation, duplicate detection, automatic verification, and retention — see [docs/REPORT_CURATION.md](docs/REPORT_CURATION.md)
 - Device accounts, push consent, location subscriptions, and photo uploads — see [docs/MOBILE_PHASE3.md](docs/MOBILE_PHASE3.md)
+- Risk model data sources and calibration plan — see [docs/RISK_DATA_SOURCES.md](docs/RISK_DATA_SOURCES.md)
+- Production hosting options and deployment checklist — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ### Monitoring and on-call
 

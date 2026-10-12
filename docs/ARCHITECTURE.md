@@ -167,18 +167,18 @@ Databases created by the old startup migration have a `schema_version` table. It
 4. ~~**Add database migrations.**~~ Done: see [Database migrations](#database-migrations). Originally: run versioned migrations as a deployment step instead of embedding schema creation in application startup. Add constraints and indexes appropriate for geographic queries.
 5. ~~**Harden the API.**~~ Done: see [Errors, request IDs, and limits](#errors-request-ids-and-limits); CORS allowlist from launch blocker 1; graceful shutdown drains readiness, finishes requests, and waits for background workers. Originally: add structured error responses, request IDs, CORS allowlists, rate limiting, timeouts, graceful shutdown, and health checks that distinguish process health from database and provider health.
 6. ~~**Make weather access resilient.**~~ Done: grid-cell caching with request coalescing, per-attempt timeouts and jittered retries, a circuit breaker, an outgoing call budget, and a stale-data policy (cached data up to `WEATHER_STALE_MAX` old is served with `stale: true`; otherwise `/api/risk` returns 503 with `Retry-After`). The notifier never alerts from stale data. Paid Open-Meteo plans are supported via `OPEN_METEO_API_KEY`. Originally: add caching by coordinate grid and time window, provider timeouts and retries with backoff, circuit breaking, and a stale-data policy. Open-Meteo and Nominatim usage must follow their service policies and rate limits.
-7. **Calibrate the risk model.** The terrain factor is a placeholder and the score has no regional validation. Do not present it as an official warning until it is evaluated against observed events and reviewed by domain experts.
+7. **Calibrate the risk model.** The terrain factor is a placeholder and the score has no regional validation. Do not present it as an official warning until it is evaluated against observed events and reviewed by domain experts. Data sources and the calibration plan are in [RISK_DATA_SOURCES.md](RISK_DATA_SOURCES.md).
 8. **Add tests and CI.** Cover score edge cases, malformed API inputs, database failures, Open-Meteo decoding, handler responses, and frontend builds. Run formatting, static analysis, tests, and dependency checks on every pull request.
-9. **Deploy the frontend and backend separately.** Configure HTTPS, a real reverse proxy or API gateway, immutable builds, environment-specific settings, backups, restore drills, and rollback procedures.
+9. **Deploy the frontend and backend separately.** Configure HTTPS, a real reverse proxy or API gateway, immutable builds, environment-specific settings, backups, restore drills, and rollback procedures. Hosting options and the recommended setup are in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ### High-value next improvements
 
-- ~~Add Prometheus-compatible metrics.~~ Done (see [ON_CALL.md](ON_CALL.md)). Still to do: centralized logs with correlation IDs.
-- Expose data freshness in the UI. Provider response age is now tracked as `aurarisk_weather_observation_age_seconds`.
+- ~~Add Prometheus-compatible metrics.~~ Done (see [ON_CALL.md](ON_CALL.md)). ~~Centralized logs with correlation IDs.~~ Done: JSON logs with `request_id`, shipped to Loki (see [ON_CALL.md](ON_CALL.md#finding-logs)).
+- ~~Expose data freshness in the UI.~~ Done: the web and mobile risk views show the weather data's age and flag cached or outdated data.
 - ~~Return confidence, source timestamps, and model version with risk assessments.~~ Done: see [Model version and confidence](#model-version-and-confidence).
 - Use PostGIS or a geospatial index for accurate radius searches instead of a latitude/longitude bounding box.
 - ~~Add report verification, duplicate detection, moderation status, and retention policies.~~ Done: see [REPORT_CURATION.md](REPORT_CURATION.md).
-- Add accessible loading, empty, error, and offline states in the frontend.
+- ~~Add accessible loading, empty, error, and offline states in the frontend.~~ Done, with a screen-reader list alternative to the map and the decision-support notice.
 - ~~Add monitoring alerts for API latency, provider failures, database saturation, and stale weather data.~~ Done: dashboards, alert rules, routing, and on-call ownership are in `observability/` and [ON_CALL.md](ON_CALL.md).
 
 ## Mobile app direction
