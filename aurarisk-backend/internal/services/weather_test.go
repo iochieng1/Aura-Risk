@@ -279,6 +279,18 @@ func TestOpenMeteoClientDoesNotRetryClientErrors(t *testing.T) {
 	}
 }
 
+func TestOpenMeteoClientErrorIncludesReason(t *testing.T) {
+	srv, _ := openMeteoServer(t, func(w http.ResponseWriter, r *http.Request, n int) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":true,"reason":"Daily API request limit exceeded."}`))
+	})
+	c := &OpenMeteoClient{URL: srv.URL, Backoff: time.Millisecond}
+	_, err := c.Fetch(context.Background(), 1, 2)
+	if !errors.Is(err, ErrRateLimited) || !strings.Contains(err.Error(), "Daily API request limit exceeded.") {
+		t.Fatalf("err = %v, want ErrRateLimited with the reason", err)
+	}
+}
+
 func TestOpenMeteoClientRequest(t *testing.T) {
 	var got *http.Request
 	srv, _ := openMeteoServer(t, func(w http.ResponseWriter, r *http.Request, n int) {
