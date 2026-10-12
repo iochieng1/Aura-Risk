@@ -1,10 +1,13 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { DECISION_SUPPORT_NOTICE } from "@aurarisk/shared";
 import type { Location, RiskAssessment, CommunityReport, ReportCategory } from "./types";
 import { fetchRisk, fetchReports, submitReport } from "./api/risk";
 import { describeError } from "./api/errors";
 import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import MapView from "./components/MapView";
+import MapListAlternative, { MAP_LIST_ID } from "./components/MapListAlternative";
+import { useOnlineStatus } from "./hooks/useOnlineStatus";
 
 const DEFAULT_CENTER: [number, number] = [120.9842, 14.5995];
 
@@ -16,6 +19,11 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reportsFailed, setReportsFailed] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const online = useOnlineStatus();
+  const menuButton = useRef<HTMLButtonElement>(null);
   // Only the latest selection may update state; slower earlier requests are ignored.
   const latestRequest = useRef(0);
 
@@ -26,6 +34,8 @@ export default function App() {
     setRisk(null);
     setReports([]);
     setLoadError(null);
+    setReportsFailed(false);
+    setNotice(null);
     setLoading(true);
 
     // Load independently so a weather outage doesn't hide community reports.
@@ -39,6 +49,7 @@ export default function App() {
     else console.error("Failed to load risk", riskResult.reason);
     if (reportsResult.status === "fulfilled") setReports(reportsResult.value);
     else console.error("Failed to load reports", reportsResult.reason);
+    setReportsFailed(reportsResult.status === "rejected");
 
     const riskError = riskResult.status === "rejected" ? describeError(riskResult.reason) : null;
     const reportsError = reportsResult.status === "rejected" ? describeError(reportsResult.reason) : null;
@@ -57,10 +68,28 @@ export default function App() {
     setLoading(false);
   }, []);
 
+  const retry = useCallback(() => {
+    if (selectedLocation) loadLocation(selectedLocation);
+  }, [selectedLocation, loadLocation]);
+
+  // Reload a failed location once the connection comes back.
+  const wasOnline = useRef(online);
+  useEffect(() => {
+    if (online && !wasOnline.current && loadError) retry();
+    wasOnline.current = online;
+  }, [online, loadError, retry]);
+
   const handleLocate = useCallback(() => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setNotice("This browser can't share your location. Search for a place instead.");
+      setSidebarOpen(true);
+      return;
+    }
+    setLocating(true);
+    setNotice(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setLocating(false);
         const loc: Location = {
           name: "My Location",
           lat: pos.coords.latitude,
@@ -68,9 +97,25 @@ export default function App() {
         };
         loadLocation(loc);
       },
-      (err) => console.warn("Geolocation error", err)
+      (err) => {
+        console.warn("Geolocation error", err);
+        setLocating(false);
+        setNotice(
+          err.code === err.PERMISSION_DENIED
+            ? "Location access is blocked. Allow it in your browser settings, or search for a place instead."
+            : "Couldn't find your location. Try again, or search for a place instead."
+        );
+        // On small screens the message is in the drawer, so open it.
+        setSidebarOpen(true);
+      },
+      { timeout: 15_000, maximumAge: 60_000 }
     );
   }, [loadLocation]);
+
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+    menuButton.current?.focus();
+  }, []);
 
   // Throws a user-facing message so the form can keep the note and show it.
   const handleSubmitReport = useCallback(
@@ -92,8 +137,16 @@ export default function App() {
 
   return (
     <div className="h-full flex flex-col">
+      <a
+        href={`#${MAP_LIST_ID}`}
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:px-3 focus:py-2 focus:bg-white focus:text-blue-700 focus:rounded-lg focus:shadow"
+      >
+        Skip to map contents as a list
+      </a>
       <Header
+        ref={menuButton}
         onLocate={handleLocate}
+        locating={locating}
         onToggleSidebar={() => setSidebarOpen((o) => !o)}
         sidebarOpen={sidebarOpen}
       />
@@ -105,14 +158,22 @@ export default function App() {
           selectedLocation={selectedLocation}
           loading={loading}
           loadError={loadError}
+          reportsFailed={reportsFailed}
+          onRetry={retry}
+          online={online}
+          notice={notice}
           onSubmitReport={handleSubmitReport}
           open={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
+          onClose={closeSidebar}
         />
         <main className="flex-1 relative">
+          <MapListAlternative location={selectedLocation} risk={risk} reports={reports} />
           <MapView center={center} risk={risk} reports={reports} />
         </main>
       </div>
+      <footer className="px-4 py-2 text-[11px] leading-snug text-gray-700 bg-amber-50 border-t border-amber-200">
+        <strong>Decision support only.</strong> {DECISION_SUPPORT_NOTICE}
+      </footer>
     </div>
   );
 }

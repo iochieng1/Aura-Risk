@@ -29,3 +29,10 @@ export const MAX_LOCATION_NAME_BYTES = 200;
 export const MAX_NOTE_BYTES = 2000;
 
 export const DEFAULT_REPORT_RADIUS_KM = 10;
+
+/**
+ * Release gate (issue #25): every client shows this wherever a risk level is
+ * shown, until an authorized agency designates AuraRisk an official warning service.
+ */
+export const DECISION_SUPPORT_NOTICE =
+  'AuraRisk is a decision-support tool, not an official flood warning. Always follow instructions from local authorities and emergency services.';
