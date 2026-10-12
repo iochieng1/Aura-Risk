@@ -1,6 +1,6 @@
 module aurarisk-backend
 
-go 1.27.1
+go 1.27.2
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.1
@@ -64,7 +64,7 @@ require (
 	go.mongodb.org/mongo-driver/v2 v2.9.2 // indirect
 	golang.org/x/arch v0.31.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
