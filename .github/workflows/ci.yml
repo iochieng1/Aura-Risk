@@ -100,6 +100,12 @@ jobs:
         run: |
           docker run --rm -v "$PWD/observability/alertmanager:/etc/alertmanager:ro" --entrypoint amtool \
             prom/alertmanager:v0.28.1 check-config /etc/alertmanager/alertmanager.yml
+      - name: Validate Loki and Alloy config
+        run: |
+          docker run --rm -v "$PWD/observability/loki:/etc/loki:ro" \
+            grafana/loki:3.7.8 -config.file=/etc/loki/loki.yml -verify-config
+          docker run --rm -v "$PWD/observability/alloy:/etc/alloy:ro" \
+            grafana/alloy:v1.20.1 validate /etc/alloy/config.alloy
       - name: Validate dashboard JSON
         run: python3 -m json.tool observability/grafana/dashboards/aurarisk-overview.json > /dev/null
 

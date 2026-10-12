@@ -112,6 +112,35 @@ services:
       DATA_SOURCE_USER: ${POSTGRES_USER:-postgres}
       DATA_SOURCE_PASS: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
 
+  # Centralized logs. Alloy tails the backend's LOG_FILE in ./logs and pushes
+  # to Loki; search them in Grafana -> Explore -> Loki, e.g. by request_id.
+  loki:
+    image: grafana/loki:3.7.8
+    profiles: [monitoring]
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/loki.yml
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./observability/loki:/etc/loki:ro
+      - aurarisk_loki:/loki
+
+  alloy:
+    image: grafana/alloy:v1.20.1
+    profiles: [monitoring]
+    restart: unless-stopped
+    depends_on:
+      - loki
+    command:
+      - run
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy:/etc/alloy:ro
+      - ./logs:/var/log/aurarisk:ro
+      - aurarisk_alloy:/var/lib/alloy/data
+
   # Local only: anonymous editor access on 127.0.0.1 with the login form off,
   # so there is no default admin password. Production Grafana is configured
   # separately (see docs/ON_CALL.md).
@@ -121,6 +150,7 @@ services:
     restart: unless-stopped
     depends_on:
       - prometheus
+      - loki
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Editor
@@ -141,3 +171,5 @@ volumes:
   aurarisk_prometheus:
   aurarisk_alertmanager:
   aurarisk_grafana:
+  aurarisk_loki:
+  aurarisk_alloy:

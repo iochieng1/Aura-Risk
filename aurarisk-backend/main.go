@@ -14,6 +14,7 @@ import (
 	"aurarisk-backend/config"
 	"aurarisk-backend/internal/database"
 	"aurarisk-backend/internal/handlers"
+	"aurarisk-backend/internal/logging"
 	"aurarisk-backend/internal/metrics"
 	"aurarisk-backend/internal/services"
 	"aurarisk-backend/internal/storage"
@@ -39,6 +40,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Startup aborted: %v", err)
 	}
+
+	closeLog, err := logging.Setup(config.LogFormat(), config.GetEnv("LOG_FILE", ""))
+	if err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
+	defer closeLog()
 
 	db := database.Connect()
 	defer db.Close()
