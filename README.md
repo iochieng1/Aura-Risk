@@ -1,5 +1,61 @@
 # AuraRisk
+
+[![CI](https://github.com/iochieng1/Aura-Risk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/iochieng1/Aura-Risk/actions/workflows/ci.yml)
+
 AuraRisk is a climate-risk platform providing localized flood predictions, early warnings, and community-driven disaster reporting. By combining weather forecasts, satellite data, geospatial mapping, and citizen insights, it helps communities, governments, NGOs, and businesses proactively prepare for flood events.
+
+> **Decision support only.** AuraRisk is not an official flood warning service, and its risk score is not yet calibrated against observed floods ([#22](https://github.com/iochieng1/Aura-Risk/issues/22)). Always follow local authorities.
+
+**Live demo:** _coming soon_ (web app and API on Render's free tier; the first request after a quiet period can take up to a minute while the server wakes up).
+
+## Highlights
+
+- **Resilient weather data:** Open-Meteo access with grid-cell caching, retries with backoff, a circuit breaker, and a stale-data fallback that is flagged in the UI.
+- **Production-minded API (Go):**
+  - structured errors with request IDs
+  - per-client rate limits
+  - versioned migrations
+  - graceful shutdown with readiness draining
+  - secrets from files or AWS Secrets Manager
+- **Observability:** Prometheus metrics, Grafana dashboards, alert rules with runbooks, and JSON logs searchable by request ID in Loki.
+- **Community reports:**
+  - duplicate detection, automatic verification and moderation
+  - retention policies and an audit log
+  - XSS-safe rendering
+- **Accessible web app (React):** loading, empty, error and offline states; data freshness; and a screen-reader list alternative to the map.
+- **Offline-first mobile app (Expo):**
+  - cached risk data and a retry queue for reports
+  - push alerts with consent and quiet hours
+  - secure token storage
+  - scanned photo uploads
+- **CI on every PR:** formatting, vet, race-detector tests with Postgres, mobile and web builds, monitoring config checks, and dependency scans.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  web[Web app<br/>React + MapLibre] -->|HTTPS /api| api[Go API]
+  mobile[Mobile app<br/>Expo] -->|HTTPS /api| api
+  api --> db[(PostgreSQL)]
+  api -->|forecast + history| om[Open-Meteo]
+  web -->|place search| osm[Nominatim / OSM]
+  api -.->|photos, optional| s3[(S3 + ClamAV)]
+  api -.->|push alerts, optional| expo[Expo Push]
+  api -.->|metrics + logs| obs[Prometheus / Loki / Grafana]
+```
+
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Roadmap
+
+| Issue | Status | Plan |
+|---|---|---|
+| [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | Open: release gate | [docs/RISK_DATA_SOURCES.md](docs/RISK_DATA_SOURCES.md): replace the placeholder terrain factor, add river discharge, backtest against past floods |
+| [#18 PostGIS spatial queries](https://github.com/iochieng1/Aura-Risk/issues/18) | Open | Radius search instead of bounding boxes; also stores the terrain layers for #22 |
+| [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | Open: release gate | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): free demo on Render now (`render.yaml`); AWS or DigitalOcean for a real launch |
+| [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | Mostly done | CI runs on every PR; remaining: require it to pass before merging, and database-failure tests |
+
+All issues: [open](https://github.com/iochieng1/Aura-Risk/issues) · [closed](https://github.com/iochieng1/Aura-Risk/issues?q=is%3Aissue+is%3Aclosed)
 
 ## Backend setup and run
 
@@ -60,6 +116,8 @@ Expected response:
 - POST `/api/reports` — create a new report
 - Report moderation, duplicate detection, automatic verification, and retention — see [docs/REPORT_CURATION.md](docs/REPORT_CURATION.md)
 - Device accounts, push consent, location subscriptions, and photo uploads — see [docs/MOBILE_PHASE3.md](docs/MOBILE_PHASE3.md)
+- Risk model data sources and calibration plan — see [docs/RISK_DATA_SOURCES.md](docs/RISK_DATA_SOURCES.md)
+- Production hosting options and deployment checklist — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ### Monitoring and on-call
 
