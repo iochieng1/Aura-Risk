@@ -57,6 +57,8 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | Open: release gate | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): free demo on Render now (`render.yaml`); AWS or DigitalOcean for a real launch |
 | [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | Mostly done | CI runs on every PR; remaining: require it to pass before merging, and database-failure tests |
 
+How these depend on each other, plus untracked work and the recommended order: [docs/ROADMAP.md](docs/ROADMAP.md).
+
 All issues: [open](https://github.com/iochieng1/Aura-Risk/issues) · [closed](https://github.com/iochieng1/Aura-Risk/issues?q=is%3Aissue+is%3Aclosed)
 
 ## Backend setup and run
