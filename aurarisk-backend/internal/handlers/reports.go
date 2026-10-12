@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -218,6 +219,7 @@ func CreateReport(c *gin.Context) {
 		internalError(c, err)
 		return
 	}
+	auditReportCreated(c, id, accountID.String, req.Category, duplicateOf)
 
 	report := models.CommunityReport{
 		ID: id,
@@ -237,6 +239,19 @@ func CreateReport(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, report)
+}
+
+// auditReportCreated logs who submitted a report so abuse can be traced.
+// The note and location name are left out because they are free text.
+func auditReportCreated(c *gin.Context, reportID, accountID, category, duplicateOf string) {
+	if accountID == "" {
+		accountID = "anonymous"
+	}
+	if duplicateOf == "" {
+		duplicateOf = "-"
+	}
+	slog.Info("report created", "request_id", GetRequestID(c), "report_id", reportID,
+		"account", accountID, "client_ip", c.ClientIP(), "category", category, "duplicate_of", duplicateOf)
 }
 
 // findDuplicate looks for an earlier report that the new one repeats. Ages

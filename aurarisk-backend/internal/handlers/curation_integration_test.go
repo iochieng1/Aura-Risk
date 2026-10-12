@@ -25,7 +25,9 @@ func curationRouter(t *testing.T) *gin.Engine {
 	t.Setenv("DATABASE_URL", dsn)
 	conn := database.Connect()
 	t.Cleanup(func() { conn.Close() })
-	database.Migrate(conn)
+	if err := database.Migrate(conn); err != nil {
+		t.Fatal(err)
+	}
 	SetDatabase(conn)
 	SetModerators(map[string]string{"alice": "alice-token"})
 	t.Cleanup(func() { SetModerators(nil) })

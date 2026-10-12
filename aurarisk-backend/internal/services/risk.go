@@ -168,6 +168,21 @@ func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName 
 	if err != nil {
 		return nil, err
 	}
+	return assess(lat, lon, locationName, w, time.Now()), nil
+}
+
+// AssessClientWeather scores weather the client fetched from Open-Meteo
+// itself, for when the server's own calls are refused (e.g. a shared egress
+// IP over the free API's daily limit). The data is checked with
+// ValidateClientWeather first; it is never cached or used for push alerts.
+func AssessClientWeather(lat, lon float64, locationName string, weather *OpenMeteoResponse, now time.Time) *models.RiskAssessment {
+	risk := assess(lat, lon, locationName, WeatherResult{Data: weather, FetchedAt: now}, now)
+	risk.Confidence.Reasons = append(risk.Confidence.Reasons,
+		"Weather data was fetched by your device rather than the AuraRisk server.")
+	return risk
+}
+
+func assess(lat, lon float64, locationName string, w WeatherResult, now time.Time) *models.RiskAssessment {
 	weather := w.Data
 
 	score := CalculateRiskScore(lat, lon, weather)
@@ -194,9 +209,9 @@ func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName 
 			WeatherFetchedAt:  w.FetchedAt.UTC(),
 			WeatherObservedAt: observedAt(weather),
 		},
-		Confidence:   AssessConfidence(weather, w.Stale, time.Now()),
+		Confidence:   AssessConfidence(weather, w.Stale, now),
 		ModelVersion: ModelVersion,
-	}, nil
+	}
 }
 
 func observedAt(weather *OpenMeteoResponse) *time.Time {

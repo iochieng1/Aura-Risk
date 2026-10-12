@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"aurarisk-backend/internal/logging"
 	"github.com/joho/godotenv"
 )
 
@@ -85,6 +86,10 @@ func Validate() error {
 		problems = append(problems, err.Error())
 	}
 
+	if err := logging.CheckFormat(LogFormat()); err != nil {
+		problems = append(problems, err.Error())
+	}
+
 	if IsProduction() {
 		for name, token := range moderators {
 			if len(token) < minModeratorTokenLength {
@@ -108,6 +113,16 @@ func Validate() error {
 		return errors.New("invalid configuration:\n  - " + strings.Join(problems, "\n  - "))
 	}
 	return nil
+}
+
+// LogFormat returns LOG_FORMAT: "json" by default in production, so logs can
+// be shipped and searched, and "text" in development.
+func LogFormat() string {
+	fallback := logging.FormatText
+	if IsProduction() {
+		fallback = logging.FormatJSON
+	}
+	return strings.ToLower(GetEnv("LOG_FORMAT", fallback))
 }
 
 func isDevSecret(value string) bool {

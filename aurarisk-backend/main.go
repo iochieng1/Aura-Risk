@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -13,6 +14,7 @@ import (
 	"aurarisk-backend/config"
 	"aurarisk-backend/internal/database"
 	"aurarisk-backend/internal/handlers"
+	"aurarisk-backend/internal/logging"
 	"aurarisk-backend/internal/metrics"
 	"aurarisk-backend/internal/services"
 	"aurarisk-backend/internal/storage"
@@ -24,6 +26,11 @@ import (
 const maxJSONBodyBytes = 64 << 10
 
 func main() {
+	migrateOnly := len(os.Args) == 2 && os.Args[1] == "migrate"
+	if len(os.Args) > 1 && !migrateOnly {
+		log.Fatalf("usage: %s [migrate]", os.Args[0])
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -33,6 +40,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Startup aborted: %v", err)
 	}
+
+	closeLog, err := logging.Setup(config.LogFormat(), config.GetEnv("LOG_FILE", ""))
+	if err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
+	defer closeLog()
 
 	db := database.Connect()
 	defer db.Close()
@@ -44,7 +57,25 @@ func main() {
 	db.SetConnMaxIdleTime(5 * time.Minute)
 	metrics.RegisterDB(db, "aurarisk")
 
-	database.Migrate(db)
+	// Migrations are a separate deployment step (`aurarisk-backend migrate`).
+	// AUTO_MIGRATE=true applies them at startup instead, for local development.
+	if migrateOnly || config.GetBool("AUTO_MIGRATE", false) {
+		if err := database.Migrate(db); err != nil {
+			log.Fatalf("Migration failed: %v", err)
+		}
+		log.Println("✅ Migrations complete")
+		if migrateOnly {
+			return
+		}
+	} else {
+		pending, err := database.PendingMigrations(db)
+		if err != nil {
+			log.Fatalf("Startup aborted: checking migrations: %v", err)
+		}
+		if len(pending) > 0 {
+			log.Fatalf("Startup aborted: %d pending migration(s) %v; run `aurarisk-backend migrate` (or `go run . migrate`) first", len(pending), pending)
+		}
+	}
 
 	handlers.SetDatabase(db)
 
@@ -185,6 +216,7 @@ func main() {
 	api := r.Group("/api", apiLimit)
 	{
 		api.GET("/risk", handlers.GetRisk)
+		api.POST("/risk", handlers.PostRiskWithWeather)
 		api.GET("/reports", handlers.GetReports)
 		api.POST("/reports", writeLimit, handlers.OptionalAuth(), handlers.CreateReport)
 

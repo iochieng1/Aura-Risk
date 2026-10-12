@@ -1,0 +1,6 @@
+.env*
+*.test
+aurarisk-backend
+tmp/
+dist/
+vendor/

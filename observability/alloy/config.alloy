@@ -1,0 +1,51 @@
+// Ships backend logs to Loki. The backend runs on the host during
+// development, so it writes JSON lines to a file this container tails:
+// LOG_FORMAT=json and LOG_FILE=../logs/backend.log in .env.
+// In production, point the source at the platform's container logs instead;
+// the processing stages apply unchanged.
+
+local.file_match "backend" {
+  path_targets = [{
+    __path__ = "/var/log/aurarisk/*.log",
+    service  = "aurarisk-backend",
+  }]
+}
+
+loki.source.file "backend" {
+  targets    = local.file_match.backend.targets
+  forward_to = [loki.process.backend.receiver]
+}
+
+loki.process "backend" {
+  // Lines that are not JSON (e.g. LOG_FORMAT=text) are shipped as they are.
+  stage.json {
+    expressions = {
+      time       = "time",
+      level      = "level",
+      request_id = "request_id",
+    }
+  }
+
+  stage.timestamp {
+    source = "time"
+    format = "RFC3339Nano"
+  }
+
+  // level has few values, so it is a label. request_id is unique per request,
+  // so it is structured metadata: filterable without bloating the index.
+  stage.labels {
+    values = { level = "" }
+  }
+
+  stage.structured_metadata {
+    values = { request_id = "" }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

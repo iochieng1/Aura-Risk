@@ -23,7 +23,9 @@ func curationDB(t *testing.T) *sql.DB {
 	t.Setenv("DATABASE_URL", dsn)
 	db := database.Connect()
 	t.Cleanup(func() { db.Close() })
-	database.Migrate(db)
+	if err := database.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
 	return db
 }
 

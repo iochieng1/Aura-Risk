@@ -35,7 +35,9 @@ func TestNotifierRunOnce(t *testing.T) {
 	t.Setenv("DATABASE_URL", dsn)
 	db := database.Connect()
 	defer db.Close()
-	database.Migrate(db)
+	if err := database.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
 
 	mustExec := func(query string, args ...any) {
 		t.Helper()
@@ -127,7 +129,9 @@ func TestNotifierSkipsStaleWeather(t *testing.T) {
 	t.Setenv("DATABASE_URL", dsn)
 	db := database.Connect()
 	defer db.Close()
-	database.Migrate(db)
+	if err := database.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
 
 	var accountID string
 	if err := db.QueryRow(`INSERT INTO accounts DEFAULT VALUES RETURNING id`).Scan(&accountID); err != nil {

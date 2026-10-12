@@ -3,3 +3,5 @@ export * from './constants';
 export * from './validation';
 export * from './client';
 export * from './geocoding';
+export * from './weather';
+export * from './freshness';

@@ -27,7 +27,7 @@ func (f *fakeFetcher) GetSecret(_ context.Context, id string) (string, error) {
 // when the test ends.
 func clearEnv(t *testing.T) {
 	t.Helper()
-	keys := []string{"APP_ENV", "NOTIFIER_INTERVAL"}
+	keys := []string{"APP_ENV", "NOTIFIER_INTERVAL", "LOG_FORMAT"}
 	for _, key := range SecretKeys {
 		keys = append(keys, key, key+"_FILE")
 	}
@@ -257,5 +257,29 @@ func TestValidateRejectsBadCORSOrigins(t *testing.T) {
 	t.Setenv("CORS_ALLOWED_ORIGINS", "https://app.example.org,http://localhost:5173")
 	if err := Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLogFormatDefaultsByEnvironment(t *testing.T) {
+	clearEnv(t)
+	if got := LogFormat(); got != "text" {
+		t.Errorf("development LogFormat() = %q, want text", got)
+	}
+	t.Setenv("APP_ENV", "production")
+	if got := LogFormat(); got != "json" {
+		t.Errorf("production LogFormat() = %q, want json", got)
+	}
+	t.Setenv("LOG_FORMAT", "TEXT")
+	if got := LogFormat(); got != "text" {
+		t.Errorf("explicit LogFormat() = %q, want text", got)
+	}
+}
+
+func TestValidateRejectsUnknownLogFormat(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://postgres:password@localhost:5432/aurarisk?sslmode=disable")
+	t.Setenv("LOG_FORMAT", "xml")
+	if err := Validate(); err == nil || !strings.Contains(err.Error(), "LOG_FORMAT") {
+		t.Fatalf("err = %v", err)
 	}
 }

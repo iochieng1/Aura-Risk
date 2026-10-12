@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"math"
 	"sync"
 	"time"
@@ -195,6 +196,8 @@ func (s *WeatherService) fetch(key cellKey, lat, lon float64, call *inflight) {
 	call.data, call.err, call.fetchedAt = data, err, s.now()
 	if err == nil {
 		s.storeLocked(key, cachedWeather{data: data, fetchedAt: call.fetchedAt})
+	} else if !errors.Is(err, context.Canceled) {
+		slog.Warn("weather fetch failed", "lat", lat, "lon", lon, "error", err.Error())
 	}
 	s.recordResultLocked(err)
 	close(call.done)

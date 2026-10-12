@@ -5,11 +5,13 @@ import { searchLocations } from "../api/nominatim";
 
 interface Props {
   onSelect: (loc: Location) => void;
+  /** Search needs the network; offline, the button is disabled and the sidebar says why. */
+  online: boolean;
 }
 
 // Nominatim's usage policy forbids search-as-you-type, so searches run only
 // on submit (Enter or the Search button).
-export default function SearchBar({ onSelect }: Props) {
+export default function SearchBar({ onSelect, online }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Location[]>([]);
   const [open, setOpen] = useState(false);
@@ -36,7 +38,7 @@ export default function SearchBar({ onSelect }: Props) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const q = query.trim();
-    if (q.length < MIN_PLACE_QUERY_LENGTH) return;
+    if (q.length < MIN_PLACE_QUERY_LENGTH || !online) return;
     const seq = ++searchSeq.current;
     setSearching(true);
     const locs = await searchLocations(q);
@@ -69,7 +71,7 @@ export default function SearchBar({ onSelect }: Props) {
         />
         <button
           type="submit"
-          disabled={tooShort || searching}
+          disabled={tooShort || searching || !online}
           className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
         >
           {searching ? "Searching…" : "Search"}

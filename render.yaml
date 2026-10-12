@@ -1,0 +1,62 @@
+# Render Blueprint for the free portfolio deployment (docs/DEPLOYMENT.md).
+# Render → New → Blueprint → pick this repo. It asks for each `sync: false`
+# value. The database is an external free Postgres (Neon); photos and push
+# alerts are off because the free tiers can't run ClamAV.
+services:
+  - type: web
+    name: aurarisk-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./aurarisk-backend/Dockerfile
+    dockerContext: ./aurarisk-backend
+    healthCheckPath: /health/ready
+    buildFilter:
+      paths:
+        - aurarisk-backend/**
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Neon connection string, e.g. postgres://user:pass@host/db?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      # The web app's URL, e.g. https://aurarisk-web.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # The free plan has no pre-deploy step, so migrations run at startup.
+      - key: AUTO_MIGRATE
+        value: "true"
+      # Push alerts need an Expo access token; off for the demo.
+      - key: NOTIFIER_INTERVAL
+        value: "0"
+      # Render's proxy connects over loopback (the access log showed
+      # client_ip ::1), so trust it and read the real client IP, used for
+      # rate limits, from X-Forwarded-For.
+      - key: TRUSTED_PROXIES
+        value: 127.0.0.1,::1,10.0.0.0/8
+
+  - type: web
+    name: aurarisk-web
+    runtime: static
+    buildCommand: cd aurarisk-frontend && npm ci && npm run build
+    staticPublishPath: ./aurarisk-frontend/dist
+    buildFilter:
+      paths:
+        - aurarisk-frontend/**
+        - packages/shared/**
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # The API's URL, e.g. https://aurarisk-api.onrender.com (read at build time)
+      - key: VITE_API_BASE_URL
+        sync: false
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: DENY

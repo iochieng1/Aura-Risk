@@ -1,4 +1,11 @@
-import { type CommunityReport, type Location, REPORT_CATEGORIES, RISK_LEVEL_COLORS } from '@aurarisk/shared';
+import {
+  type CommunityReport,
+  DECISION_SUPPORT_NOTICE,
+  describeFreshness,
+  type Location,
+  REPORT_CATEGORIES,
+  RISK_LEVEL_COLORS,
+} from '@aurarisk/shared';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { fetchNearbyReports, fetchRiskAssessment, RiskFetchResult } from '../services/api';
@@ -38,6 +45,7 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
   if (loading) return <ActivityIndicator accessibilityLabel="Loading flood risk" />;
 
   const data = risk?.data;
+  const freshness = data ? describeFreshness(data) : null;
   return (
     <View style={styles.section}>
       <Text style={styles.heading}>Flood risk</Text>
@@ -58,10 +66,20 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
               • {tip}
             </Text>
           ))}
+          {freshness && (
+            <Text style={freshness.outdated ? styles.outdated : styles.meta}>
+              {freshness.label}
+              {freshness.outdated ? '. Conditions may have changed.' : ''}
+            </Text>
+          )}
         </View>
       ) : (
         !risk?.isOffline && <Text style={styles.error}>Could not load flood risk for this place.</Text>
       )}
+
+      <Text style={styles.notice} accessibilityRole="text">
+        {DECISION_SUPPORT_NOTICE}
+      </Text>
 
       <Text style={styles.subheading}>Nearby reports ({reports.length})</Text>
       {reports.length === 0 && <Text style={styles.meta}>No community reports within 10 km.</Text>}
@@ -90,6 +108,8 @@ const styles = StyleSheet.create({
   body: { fontSize: 14, lineHeight: 20 },
   meta: { fontSize: 13, color: '#555' },
   error: { color: '#b00020' },
+  outdated: { fontSize: 13, color: '#7a4a00' },
+  notice: { fontSize: 12, lineHeight: 17, color: '#444', backgroundColor: '#fff8e1', padding: 8, borderRadius: 6 },
   report: { paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: '#ddd', gap: 2 },
   reportTitle: { fontSize: 13, fontWeight: '600' },
 });

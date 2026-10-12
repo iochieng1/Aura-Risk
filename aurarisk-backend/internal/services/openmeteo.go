@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"aurarisk-backend/internal/metrics"
@@ -30,7 +32,10 @@ const (
 )
 
 type OpenMeteoResponse struct {
-	UTCOffsetSeconds int `json:"utc_offset_seconds"`
+	// The grid point Open-Meteo used, close to the requested coordinates.
+	Latitude         float64 `json:"latitude"`
+	Longitude        float64 `json:"longitude"`
+	UTCOffsetSeconds int     `json:"utc_offset_seconds"`
 	Current          struct {
 		Time             string  `json:"time"`
 		Temperature2m    float64 `json:"temperature_2m"`
@@ -155,11 +160,11 @@ func (c *OpenMeteoClient) fetchOnce(ctx context.Context, lat, lon float64) (_ *O
 
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests:
-		return nil, false, ErrRateLimited
+		return nil, false, fmt.Errorf("%w: %s", ErrRateLimited, errorReason(resp.Body))
 	case resp.StatusCode >= 500:
-		return nil, true, fmt.Errorf("weather API returned status %d", resp.StatusCode)
+		return nil, true, fmt.Errorf("weather API returned status %d: %s", resp.StatusCode, errorReason(resp.Body))
 	case resp.StatusCode != http.StatusOK:
-		return nil, false, fmt.Errorf("weather API returned status %d", resp.StatusCode)
+		return nil, false, fmt.Errorf("weather API returned status %d: %s", resp.StatusCode, errorReason(resp.Body))
 	}
 
 	var data OpenMeteoResponse
@@ -181,4 +186,20 @@ func (r *OpenMeteoResponse) ObservedAt() (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return local.Add(-time.Duration(r.UTCOffsetSeconds) * time.Second), true
+}
+
+// errorReason extracts Open-Meteo's {"error":true,"reason":"..."} message,
+// falling back to the start of the body, so logs say why a call failed.
+func errorReason(body io.Reader) string {
+	raw, _ := io.ReadAll(io.LimitReader(body, 512))
+	var parsed struct {
+		Reason string `json:"reason"`
+	}
+	if json.Unmarshal(raw, &parsed) == nil && parsed.Reason != "" {
+		return parsed.Reason
+	}
+	if text := strings.TrimSpace(string(raw)); text != "" {
+		return strings.Join(strings.Fields(text), " ")
+	}
+	return "no reason given"
 }
