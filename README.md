@@ -112,6 +112,7 @@ Expected response:
 ### API endpoints
 - GET `/health` — health check
 - GET `/api/risk?lat=...&lon=...` — flood risk assessment
+- POST `/api/risk` — flood risk from weather the client fetched from Open-Meteo (`{lat, lon, weather}`); used automatically when GET answers 503
 - GET `/api/reports?lat=...&lon=...` — nearby community reports
 - POST `/api/reports` — create a new report
 - Report moderation, duplicate detection, automatic verification, and retention — see [docs/REPORT_CURATION.md](docs/REPORT_CURATION.md)

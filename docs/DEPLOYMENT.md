@@ -50,11 +50,20 @@ portfolio demo is non-commercial.
 - Open the web app, use **My Location** or search a town, and confirm the
   risk card and reports load.
 - In the API's Render logs, the JSON access log's `client_ip` should be your
-  own IP address. If it shows a `10.x` address instead, Render's proxy is
-  outside `TRUSTED_PROXIES`. Then every visitor shares one rate limit, which
-  is acceptable for a demo but worth fixing.
+  own IP address. If it shows `::1`, `127.0.0.1` or a `10.x` address,
+  Render's proxy isn't covered by `TRUSTED_PROXIES`, so every visitor shares
+  one rate limit. Set it to `127.0.0.1,::1,10.0.0.0/8` (the value in
+  `render.yaml`) and redeploy.
 
 ### Free-tier limits
+
+- **Weather on a shared IP:** Render's free services share outgoing IP
+  addresses, which often exceed Open-Meteo's free daily limit ("Daily API
+  request limit exceeded" in the logs). Then `GET /api/risk` answers 503 and
+  the apps fall back to fetching the weather on the visitor's device: each
+  visitor uses their own allowance, and the server still validates and scores
+  the data (`POST /api/risk`). The risk card's confidence reasons say when
+  this happened.
 
 - **Sleeping:** the API sleeps after about 15 minutes idle, so the first
   request then takes up to a minute. The web app shows its loading state

@@ -8,8 +8,9 @@ dependencies and ships as source, so there is no build step.
 | `types.ts` | Wire types for the backend JSON (`RiskAssessment`, `CommunityReport`, `NewReportInput`, subscriptions, photos, tokens) |
 | `constants.ts` | Risk levels and colours, `scoreToLevel`, report categories, server-side length limits |
 | `validation.ts` | `validateNewReport`, `validateLocation`, `parseCoordinates`, and response guards (`isRiskAssessment`, `isCommunityReport`) |
-| `client.ts` | `createApiClient({ baseUrl, fetch })` for `GET /api/risk`, `GET /api/reports`, `POST /api/reports`, plus `ApiError` / `ValidationError` |
+| `client.ts` | `createApiClient({ baseUrl, fetch, weatherFallback })` for `GET /api/risk` (falling back to device-fetched weather and `POST /api/risk` on a 503), `GET /api/reports`, `POST /api/reports`, plus `ApiError` / `ValidationError` |
 | `geocoding.ts` | `searchPlaces` (OpenStreetMap Nominatim) |
+| `weather.ts` | `openMeteoForecastUrl`: the Open-Meteo request the backend makes, used by the client's device-weather fallback |
 
 The validators mirror the Go handlers in `aurarisk-backend/internal/handlers`, and the server
 remains the source of truth. If you change a JSON field or a limit in the backend, change it here too.

@@ -1,6 +1,7 @@
 import { DEFAULT_REPORT_RADIUS_KM } from './constants';
 import type { CommunityReport, Coordinates, Location, NewReportInput, RiskAssessment } from './types';
 import { type FieldErrors, isCommunityReport, isRiskAssessment, validateNewReport } from './validation';
+import { openMeteoForecastUrl } from './weather';
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -9,6 +10,13 @@ export interface ApiClientOptions {
   baseUrl: string;
   /** Override to add timeouts, auth headers, or test doubles. Defaults to global fetch. */
   fetch?: FetchLike;
+  /**
+   * When GET /api/risk answers 503 because the server can't get weather data
+   * (e.g. its shared IP is over Open-Meteo's free daily limit), fetch the
+   * weather from Open-Meteo on this device and have the server score it with
+   * POST /api/risk. Default true.
+   */
+  weatherFallback?: boolean;
 }
 
 /** The server answered with a non-2xx status. `message` is the backend's `error` field when present. */
@@ -47,7 +55,8 @@ export class MalformedResponseError extends Error {
 export interface ApiClient {
   /**
    * GET /api/risk. When `at` has a name it replaces the server's placeholder
-   * ("Selected Location"), since the backend does not geocode.
+   * ("Selected Location"), since the backend does not geocode. Falls back
+   * to device-fetched weather on a 503 (see `weatherFallback`).
    */
   getRisk(at: Coordinates | Location): Promise<RiskAssessment>;
   /** GET /api/reports. Newest first, at most 50. */
@@ -72,7 +81,7 @@ const readError = async (response: Response): Promise<ApiError> => {
   return new ApiError(response.status, message, code, requestId, retryAfter > 0 ? retryAfter : undefined);
 };
 
-export function createApiClient({ baseUrl, fetch: fetchImpl }: ApiClientOptions): ApiClient {
+export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = true }: ApiClientOptions): ApiClient {
   const doFetch: FetchLike = fetchImpl ?? ((url, init) => fetch(url, init));
   const root = baseUrl.replace(/\/+$/, '');
 
@@ -84,9 +93,33 @@ export function createApiClient({ baseUrl, fetch: fetchImpl }: ApiClientOptions)
 
   const coordQuery = ({ lat, lon }: Coordinates) => `lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
 
+  // Fetches weather on this device and asks the server to score it. If that
+  // fails too, the server's original 503 is what the caller sees.
+  const riskFromDeviceWeather = async ({ lat, lon }: Coordinates, serverError: ApiError): Promise<unknown> => {
+    let weather: unknown;
+    try {
+      const response = await doFetch(openMeteoForecastUrl({ lat, lon }));
+      if (!response.ok) throw serverError;
+      weather = await response.json();
+    } catch {
+      throw serverError;
+    }
+    return request('/api/risk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lon, weather }),
+    });
+  };
+
   return {
     async getRisk(at) {
-      const body = await request(`/api/risk?${coordQuery(at)}`);
+      let body: unknown;
+      try {
+        body = await request(`/api/risk?${coordQuery(at)}`);
+      } catch (err) {
+        if (!weatherFallback || !(err instanceof ApiError) || err.status !== 503) throw err;
+        body = await riskFromDeviceWeather(at, err);
+      }
       if (!isRiskAssessment(body)) throw new MalformedResponseError('risk');
       const name = 'name' in at && at.name ? at.name : body.location.name;
       return { ...body, location: { ...body.location, name } };

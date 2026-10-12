@@ -216,6 +216,7 @@ func main() {
 	api := r.Group("/api", apiLimit)
 	{
 		api.GET("/risk", handlers.GetRisk)
+		api.POST("/risk", handlers.PostRiskWithWeather)
 		api.GET("/reports", handlers.GetReports)
 		api.POST("/reports", writeLimit, handlers.OptionalAuth(), handlers.CreateReport)
 
