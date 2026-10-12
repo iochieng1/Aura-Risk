@@ -58,6 +58,58 @@ describe('createApiClient', () => {
     await expect(bad.getRisk({ lat: 0, lon: 0 })).rejects.toBeInstanceOf(MalformedResponseError);
   });
 
+  describe('device weather fallback', () => {
+    const weather = { latitude: -0.1, longitude: 34.8, current: {}, hourly: {} };
+    const unavailable = () => json({ error: 'weather data is temporarily unavailable' }, 503);
+
+    it('fetches weather on the device and posts it when the server answers 503', async () => {
+      const fetch = jest.fn(async (url: string) => {
+        if (url.startsWith('https://api.open-meteo.com/')) return json(weather);
+        return url.endsWith('/api/risk') ? json(risk) : unavailable();
+      });
+      const client = createApiClient({ baseUrl: 'http://api.test', fetch });
+
+      const result = await client.getRisk({ name: 'Kisumu', lat: -0.07, lon: 34.77 });
+
+      expect(result.location.name).toBe('Kisumu');
+      const weatherUrl = new URL(fetch.mock.calls[1][0]);
+      expect(Object.fromEntries(weatherUrl.searchParams)).toMatchObject({
+        latitude: '-0.070000',
+        longitude: '34.770000',
+        past_days: '7',
+        forecast_days: '2',
+        hourly: 'precipitation,rain,soil_moisture_0_to_7cm',
+        timezone: 'auto',
+      });
+      expect(fetch.mock.calls[2]).toEqual([
+        'http://api.test/api/risk',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ lat: -0.07, lon: 34.77, weather }) }),
+      ]);
+    });
+
+    it('throws the server error when the device cannot get weather either', async () => {
+      const fetch = jest.fn(async (url: string) =>
+        url.startsWith('https://api.open-meteo.com/') ? json({ reason: 'limit' }, 429) : unavailable()
+      );
+      const client = createApiClient({ baseUrl: '', fetch });
+      await expect(client.getRisk({ lat: 0, lon: 0 })).rejects.toMatchObject({ status: 503 });
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('is skipped for other errors and when disabled', async () => {
+      const notFound = jest.fn(async () => json({ error: 'nope' }, 400));
+      await expect(createApiClient({ baseUrl: '', fetch: notFound }).getRisk({ lat: 0, lon: 0 })).rejects.toMatchObject({
+        status: 400,
+      });
+      expect(notFound).toHaveBeenCalledTimes(1);
+
+      const down = jest.fn(async () => unavailable());
+      const client = createApiClient({ baseUrl: '', fetch: down, weatherFallback: false });
+      await expect(client.getRisk({ lat: 0, lon: 0 })).rejects.toMatchObject({ status: 503 });
+      expect(down).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('validates a report before sending it', async () => {
     const fetch = jest.fn();
     const client = createApiClient({ baseUrl: '', fetch });

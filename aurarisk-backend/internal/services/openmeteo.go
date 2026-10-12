@@ -32,7 +32,10 @@ const (
 )
 
 type OpenMeteoResponse struct {
-	UTCOffsetSeconds int `json:"utc_offset_seconds"`
+	// The grid point Open-Meteo used, close to the requested coordinates.
+	Latitude         float64 `json:"latitude"`
+	Longitude        float64 `json:"longitude"`
+	UTCOffsetSeconds int     `json:"utc_offset_seconds"`
 	Current          struct {
 		Time             string  `json:"time"`
 		Temperature2m    float64 `json:"temperature_2m"`
