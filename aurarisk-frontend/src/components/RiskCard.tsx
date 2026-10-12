@@ -1,23 +1,63 @@
+import { describeFreshness } from "@aurarisk/shared";
 import type { RiskAssessment } from "../types";
 import StatusBadge from "./StatusBadge";
 import { RISK_CONFIG } from "../utils/risk";
+import { useNow } from "../hooks/useNow";
+
+const CONFIDENCE_LABEL = { low: "Low", medium: "Medium", high: "High" } as const;
 
 export default function RiskCard({ risk }: { risk: RiskAssessment }) {
   const c = RISK_CONFIG[risk.level];
+  const now = useNow();
+  const freshness = describeFreshness(risk, now);
+  const fetchedAt = risk.source_timestamps?.weather_fetched_at;
 
   return (
-    <div className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
+    <section className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-sm font-semibold text-gray-700">Flood Risk</h2>
         <StatusBadge level={risk.level} />
       </div>
 
-      <div className="flex items-end gap-2 mb-2">
+      <p className="flex items-end gap-2 mb-2">
         <span className={`text-3xl font-bold ${c.text}`}>{risk.score}</span>
-        <span className="text-sm text-gray-500 mb-1">/ 100</span>
-      </div>
+        <span className="text-sm text-gray-600 mb-1">/ 100</span>
+      </p>
 
-      <p className="text-xs text-gray-600 leading-relaxed">{risk.summary}</p>
-    </div>
+      <p className="text-xs text-gray-700 leading-relaxed">{risk.summary}</p>
+
+      {freshness && (
+        <p
+          className={`mt-3 text-xs ${
+            freshness.outdated ? "text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2" : "text-gray-600"
+          }`}
+        >
+          {freshness.outdated && <span aria-hidden="true">⚠️ </span>}
+          {fetchedAt ? (
+            <time dateTime={risk.source_timestamps?.weather_observed_at || fetchedAt} title={new Date(fetchedAt).toLocaleString()}>
+              {freshness.label}
+            </time>
+          ) : (
+            freshness.label
+          )}
+          {freshness.outdated && ". Conditions may have changed."}
+        </p>
+      )}
+
+      {risk.confidence && (
+        <details className="mt-2 text-xs text-gray-600">
+          <summary className="cursor-pointer">
+            Confidence: {CONFIDENCE_LABEL[risk.confidence.level] ?? risk.confidence.level}
+          </summary>
+          {risk.confidence.reasons.length > 0 && (
+            <ul className="mt-1 ml-4 list-disc space-y-0.5">
+              {risk.confidence.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+        </details>
+      )}
+    </section>
   );
 }
