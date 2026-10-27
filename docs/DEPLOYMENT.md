@@ -94,8 +94,12 @@ A short screen recording is often the easiest way to show it in a portfolio.
 
 ## Region
 
-Pick the cloud region closest to users. For a Philippines launch (the web map
-defaults to Manila), that is **Singapore** on the major clouds.
+Pick the cloud region closest to users. Kenya is the launch region
+([#56](https://github.com/iochieng1/Aura-Risk/issues/56)): measure latency from
+Kisumu and Nairobi to the provider's European (Frankfurt, London, Paris) and
+South African (Cape Town, Johannesburg) regions and choose the lowest. The
+Singapore option below was written for a Philippines launch; the services are
+the same in any region.
 
 ## Option A: AWS, Singapore (`ap-southeast-1`), recommended for launch
 

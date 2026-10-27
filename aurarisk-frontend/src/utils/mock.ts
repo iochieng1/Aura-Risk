@@ -44,21 +44,21 @@ export function getMockReports(): CommunityReport[] {
   return [
     {
       id: "r1",
-      location: { name: "Downtown Bridge", lat: 14.5995, lon: 120.9842 },
+      location: { name: "Nyalenda Bridge", lat: -0.1103, lon: 34.7721 },
       category: "flooding",
       note: "Water up to knee level on the main road.",
       timestamp: new Date(Date.now() - 1800000).toISOString(),
     },
     {
       id: "r2",
-      location: { name: "Market Street", lat: 14.601, lon: 120.986 },
+      location: { name: "Kibuye Market", lat: -0.0886, lon: 34.7612 },
       category: "road_blocked",
       note: "Fallen tree blocking both lanes.",
       timestamp: new Date(Date.now() - 3600000).toISOString(),
     },
     {
       id: "r3",
-      location: { name: "Riverside Park", lat: 14.597, lon: 120.982 },
+      location: { name: "Nyamasaria River", lat: -0.0921, lon: 34.8065 },
       category: "water_rising",
       note: "River level rising fast, about 1m below bridge.",
       timestamp: new Date(Date.now() - 900000).toISOString(),
