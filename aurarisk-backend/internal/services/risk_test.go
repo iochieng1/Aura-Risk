@@ -52,7 +52,7 @@ func TestScoreUsesHoursAheadNotStartOfHistory(t *testing.T) {
 	for i := now + 1; i <= now+6; i++ {
 		ahead.Hourly.Precipitation[i] = 10
 	}
-	if a, b := CalculateRiskScore(0, 0, old), CalculateRiskScore(0, 0, ahead); b-a < 50 {
+	if a, b := CalculateRiskScore(old, Hydrology{}), CalculateRiskScore(ahead, Hydrology{}); b-a < 50 {
 		t.Fatalf("forecast rain barely moved the score: start-of-history %d, next-six-hours %d", a, b)
 	}
 }
@@ -61,7 +61,7 @@ func TestScoreCountsRainEarlierToday(t *testing.T) {
 	dry, wet := weatherAt(15), weatherAt(15)
 	now, _ := currentHourIndex(wet)
 	wet.Hourly.Precipitation[now-2] = 50 // this afternoon, after local midnight
-	if CalculateRiskScore(0, 0, wet) <= CalculateRiskScore(0, 0, dry) {
+	if CalculateRiskScore(wet, Hydrology{}) <= CalculateRiskScore(dry, Hydrology{}) {
 		t.Fatal("rain earlier today did not raise the score")
 	}
 }
@@ -70,7 +70,7 @@ func TestScoreIgnoresRainAfterForecastWindow(t *testing.T) {
 	dry, later := weatherAt(15), weatherAt(15)
 	now, _ := currentHourIndex(later)
 	later.Hourly.Precipitation[now+7] = 50
-	if CalculateRiskScore(0, 0, later) != CalculateRiskScore(0, 0, dry) {
+	if CalculateRiskScore(later, Hydrology{}) != CalculateRiskScore(dry, Hydrology{}) {
 		t.Fatal("rain 7 hours ahead changed the score")
 	}
 }

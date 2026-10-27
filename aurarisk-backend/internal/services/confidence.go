@@ -23,8 +23,9 @@ const maxObservationAge = 2 * time.Hour
 // AssessConfidence rates how far an assessment's inputs can be trusted. It
 // describes data quality and model maturity, not a probability that the
 // score is right. Every reason lowers the level; Reasons lists them all.
-func AssessConfidence(weather *OpenMeteoResponse, stale bool, now time.Time) *models.Confidence {
-	var low []string
+// missing lists other inputs that were unavailable, in plain language.
+func AssessConfidence(weather *OpenMeteoResponse, stale bool, now time.Time, missing ...string) *models.Confidence {
+	low := append([]string(nil), missing...)
 
 	if stale {
 		low = append(low, "Live weather was unavailable; this uses cached data.")
