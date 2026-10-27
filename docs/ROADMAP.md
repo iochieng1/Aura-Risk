@@ -35,7 +35,7 @@ flowchart TD
   i22a["#22 part 1<br/>real elevation + river discharge"] --> i22b
   i18 --> i22b["#22 part 2<br/>drainage, soil, land-cover layers"]
   i22b --> i22c["#22 part 3<br/>backtest + regional model report"]
-  region{{"Launch region decision<br/>(Kenya? Philippines?)"}} --> i22c
+  region{{"Launch region: Kenya<br/>(Kisumu pilot, #56)"}} --> i22c
   region --> i27
   i27["#27 Production deployment<br/>hosting, runbooks, restore drill"] --> launch
   i22c --> launch(["Public launch"])
@@ -54,10 +54,12 @@ The connections, in words:
   start now.)*
 - **#22 ↔ #27, through the launch region.** #22's release gate is "a validated
   model report *for each launch region*", and #27's hosting region should be
-  close to users. Both depend on one decision that hasn't been made: **where
-  AuraRisk launches first.** The map defaults to Manila, but the live demo has
-  been used from Kisumu, Kenya. Decide this first; it changes which flood
-  records, hazard maps and agencies #22 relies on.
+  close to users. Both depend on where AuraRisk launches first. **Decided
+  ([#56](https://github.com/iochieng1/Aura-Risk/issues/56)): Kenya, with
+  Kisumu as the first pilot area.** The demo was already used from there, and
+  its floods (Kano plains, Nyando and Nzoia rivers) are river floods that
+  GloFAS and satellite records can see. #22 uses Kenyan flood records and
+  agencies (see [RISK_DATA_SOURCES.md](RISK_DATA_SOURCES.md)).
 - **#26 → #27.** Production deployment depends on CI for its safety:
   - an image built and tagged per commit makes rollback possible;
   - required checks stop broken code reaching `main`, which Render deploys
@@ -198,9 +200,11 @@ The full plan is in [RISK_DATA_SOURCES.md](RISK_DATA_SOURCES.md). In short:
 
 **Left:**
 1. **Pick the launch region first.**
-   - The docs assume Singapore for a Philippines launch.
-   - For **Kenya / East Africa**, choose the nearest region your provider
-     offers, often in Europe or South Africa, and compare latency.
+   - Kenya is the launch region (#56). Choose the provider region with the
+     lowest measured latency from Kisumu and Nairobi: usually Europe
+     (Frankfurt, London, Paris) or South Africa (Cape Town, Johannesburg).
+   - The free demo stays in Render's Singapore region for now; Render can't
+     move an existing service, so a move means a new service.
 2. **Immutable releases:** CI pushes images tagged with the commit SHA to a
    registry. Deploy a tag, and roll back by redeploying the previous one.
 3. **Infrastructure as code** (Terraform or similar) for the chosen provider.
@@ -234,9 +238,24 @@ Found during this assessment. Each is worth an issue, so nothing is forgotten.
 | **Moderation on the demo** | `MODERATOR_TOKENS` is unset, so the moderation API is off and test reports can't be removed through the API | S |
 | **`GET /api/risk` range check** | Unlike `POST /api/risk`, it doesn't reject latitude/longitude outside ±90/±180 | S |
 | **Location names** | The backend doesn't geocode, so the risk summary always says "Flood risk for Selected Location…". The shared client replaces `location.name`, but not the summary text the card shows | S |
-| **Default map centre** | Manila; change it to match the launch region | S |
+| ~~**Default map centre**~~ | Done: Kisumu, configurable with `VITE_DEFAULT_CENTER` (#56) | — |
 | **Mobile follow-ups** (from the #31/#32 review) | Queued reports are dropped **silently** after 3 failed retries; the offline cache is never evicted; no tests for the cache, push setup, background refresh or photo upload | M |
 | **Client-weather trust** | The device-weather fallback validates data but can't prove it's genuine. That's fine because it only affects the caller's own result. Keep it that way: never cache it, alert from it, or store it | — |
+
+## Kenya pilot work
+
+Planned after choosing Kenya. The first two are part of #22; the rest make
+AuraRisk usable and accountable in the pilot area.
+
+| Issue | What |
+|---|---|
+| [#57](https://github.com/iochieng1/Aura-Risk/issues/57) | Real elevation and GloFAS river discharge (#22 part 1) |
+| [#58](https://github.com/iochieng1/Aura-Risk/issues/58) | Backtest harness and Kenya 2024 long-rains events (#22 part 3) |
+| [#59](https://github.com/iochieng1/Aura-Risk/issues/59) | County and ward on reports |
+| [#60](https://github.com/iochieng1/Aura-Risk/issues/60) | Swahili translations |
+| [#61](https://github.com/iochieng1/Aura-Risk/issues/61) | SMS and USSD access for feature phones |
+| [#62](https://github.com/iochieng1/Aura-Risk/issues/62) | Route verified reports to county responders, with a public status |
+| [#63](https://github.com/iochieng1/Aura-Risk/issues/63) | Public county dashboard and open data |
 
 ## Release gates: status
 
@@ -259,7 +278,7 @@ From [ARCHITECTURE.md](ARCHITECTURE.md#recommended-release-gates):
 | Phase | Work | Why now |
 |---|---|---|
 | **0: quick wins** | ~~Merge PR #45~~ · ~~Go 1.27.2 upgrade~~ · ~~Open-Meteo attribution~~ · check `client_ip` · branch protection | Security and licence fixes; the first three are done |
-| **1: decide** | Choose the launch region | Shapes #22's data and #27's hosting |
+| **1: decide** | ~~Choose the launch region~~: Kenya, Kisumu pilot (#56) | Shapes #22's data and #27's hosting |
 | **2: foundations** | #26 database-failure tests and web tests · #22 part 1 (real elevation + river discharge) | Removes the placeholder quickly; small and visible |
 | **3: spatial** | #18 PostGIS | Unlocks #22's static layers and fixes radius search |
 | **4: calibrate** | #22 parts 2–3: layers, backtest, model report | The release gate that makes the score trustworthy |
