@@ -124,8 +124,8 @@ Build for production with `npm run build`.
     "model_version": "heuristic-2"
   }
   ```
-- `GET /api/reports?lat=<lat>&lon=<lon>&radius=<km>`: up to 50 nearby reports.
-- `POST /api/reports`: creates a community report.
+- `GET /api/reports?lat=<lat>&lon=<lon>&radius=<km>`: up to 50 nearby reports. Add `county=<name>` to keep only one Kenyan county's reports, or pass `county` alone (no `lat`/`lon`) to list that county's latest reports.
+- `POST /api/reports`: creates a community report. Optional `county` (any of Kenya's 47 counties; case, a trailing "County" and spaces or hyphens are ignored, and the official name is stored) and `ward` (free text, up to 100 bytes, needs a county). Reports return both when set.
 
 The report endpoint expects `location`, `category`, and `note`. Valid categories are `flooding`, `road_blocked`, `water_rising`, and `drainage_issue`.
 

@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"aurarisk-backend/internal/models"
@@ -27,12 +29,31 @@ type CreateReportRequest struct {
 	} `json:"location"`
 	Category string `json:"category"`
 	Note     string `json:"note"`
+	// Optional Kenyan county (any of the 47, matched loosely) and ward.
+	County string `json:"county"`
+	Ward   string `json:"ward"`
 }
 
+// GetReports lists up to 50 public reports, newest first, near lat/lon
+// (within radius km) and/or in a Kenyan county. At least one of the two is
+// required.
 func GetReports(c *gin.Context) {
 	latStr := c.Query("lat")
 	lonStr := c.Query("lon")
 	radiusStr := c.DefaultQuery("radius", "10")
+
+	county := ""
+	if raw := c.Query("county"); raw != "" {
+		var ok bool
+		if county, ok = services.NormalizeCounty(raw); !ok {
+			respondError(c, http.StatusBadRequest, "unknown county")
+			return
+		}
+	}
+	if county != "" && latStr == "" && lonStr == "" {
+		getReports(c, county, nil)
+		return
+	}
 
 	if latStr == "" || lonStr == "" {
 		respondError(c, http.StatusBadRequest, "lat and lon are required")
@@ -59,7 +80,12 @@ func GetReports(c *gin.Context) {
 
 	latDelta := radius / 111.0
 	lonDelta := radius / (111.0 * 0.9)
+	getReports(c, county, &[4]float64{lat - latDelta, lat + latDelta, lon - lonDelta, lon + lonDelta})
+}
 
+// getReports runs the public listing, filtered by county when set and by the
+// box (minLat, maxLat, minLon, maxLon) when non-nil.
+func getReports(c *gin.Context, county string, box *[4]float64) {
 	// Rejected reports and duplicates are never public. Pending reports are
 	// shown with their status so clients can mark them unverified.
 	statuses := []string{services.ReportPending, services.ReportVerified}
@@ -67,23 +93,27 @@ func GetReports(c *gin.Context) {
 		statuses = []string{services.ReportVerified}
 	}
 
+	// Filters are added only when used, so each query shape can use its index.
+	args := []any{pq.Array(statuses)}
+	filters := ""
+	if box != nil {
+		args = append(args, box[0], box[1], box[2], box[3])
+		filters += " AND lat BETWEEN $2 AND $3 AND lon BETWEEN $4 AND $5"
+	}
+	if county != "" {
+		args = append(args, county)
+		filters += fmt.Sprintf(" AND county = $%d", len(args))
+	}
 	query := `
-		SELECT id, location_name, lat, lon, category, note, created_at, moderation_status, corroboration_count
+		SELECT id, location_name, lat, lon, category, note, created_at, moderation_status, corroboration_count, county, ward
 		FROM community_reports
-		WHERE lat BETWEEN $1 AND $2
-		AND lon BETWEEN $3 AND $4
-		AND moderation_status = ANY($5)
-		AND duplicate_of IS NULL
+		WHERE moderation_status = ANY($1)
+		AND duplicate_of IS NULL` + filters + `
 		ORDER BY created_at DESC
 		LIMIT 50
 	`
 
-	rows, err := db.Query(
-		query,
-		lat-latDelta, lat+latDelta,
-		lon-lonDelta, lon+lonDelta,
-		pq.Array(statuses),
-	)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -103,6 +133,8 @@ func GetReports(c *gin.Context) {
 			&r.Timestamp,
 			&r.Status,
 			&r.Corroborations,
+			&r.County,
+			&r.Ward,
 		); err != nil {
 			internalError(c, err)
 			return
@@ -167,6 +199,12 @@ func CreateReport(c *gin.Context) {
 		return
 	}
 
+	county, ward, msg := validateCountyWard(req.County, req.Ward)
+	if msg != "" {
+		respondError(c, http.StatusBadRequest, msg)
+		return
+	}
+
 	// Reports from signed-in devices are owned so photos can be attached.
 	var accountID sql.NullString
 	if id := c.GetString(ctxAccountID); id != "" {
@@ -194,8 +232,8 @@ func CreateReport(c *gin.Context) {
 	}
 
 	query := `
-		INSERT INTO community_reports (location_name, lat, lon, category, note, account_id, duplicate_of)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO community_reports (location_name, lat, lon, category, note, account_id, duplicate_of, county, ward)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at
 	`
 
@@ -210,6 +248,8 @@ func CreateReport(c *gin.Context) {
 		req.Note,
 		accountID,
 		sql.NullString{String: duplicateOf, Valid: duplicateOf != ""},
+		county,
+		ward,
 	).Scan(&id, &createdAt)
 	if err != nil {
 		internalError(c, err)
@@ -233,12 +273,36 @@ func CreateReport(c *gin.Context) {
 		Timestamp: createdAt,
 		Photos:    []models.ReportPhoto{},
 		Status:    services.ReportPending,
+		County:    county,
+		Ward:      ward,
 	}
 	if duplicateOf != "" {
 		report.DuplicateOf = &duplicateOf
 	}
 
 	c.JSON(http.StatusCreated, report)
+}
+
+// validateCountyWard returns the official county name and trimmed ward (nil
+// when not given), or an error message. A ward needs a county.
+func validateCountyWard(rawCounty, rawWard string) (county, ward *string, msg string) {
+	if rawCounty = strings.TrimSpace(rawCounty); rawCounty != "" {
+		name, ok := services.NormalizeCounty(rawCounty)
+		if !ok {
+			return nil, nil, "unknown county"
+		}
+		county = &name
+	}
+	if rawWard = strings.TrimSpace(rawWard); rawWard != "" {
+		if county == nil {
+			return nil, nil, "ward requires a county"
+		}
+		if len(rawWard) > services.MaxWardBytes {
+			return nil, nil, "ward is too long"
+		}
+		ward = &rawWard
+	}
+	return county, ward, ""
 }
 
 // auditReportCreated logs who submitted a report so abuse can be traced.

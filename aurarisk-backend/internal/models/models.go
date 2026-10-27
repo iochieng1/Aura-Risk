@@ -66,6 +66,9 @@ type CommunityReport struct {
 	// DuplicateOf is set when this report repeats an earlier one. Duplicates
 	// are hidden from public listings.
 	DuplicateOf *string `json:"duplicate_of,omitempty"`
+	// Kenyan county (official name) and ward, when the reporter gave them.
+	County *string `json:"county,omitempty"`
+	Ward   *string `json:"ward,omitempty"`
 }
 
 // ModerationReport is a report as moderators see it.

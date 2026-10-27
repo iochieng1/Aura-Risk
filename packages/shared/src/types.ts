@@ -1,3 +1,5 @@
+import type { KenyaCounty } from './constants';
+
 // Wire types for the AuraRisk HTTP API. Field names match the JSON the Go backend emits
 // (aurarisk-backend/internal/models). Change them together.
 
@@ -87,6 +89,9 @@ export interface CommunityReport {
    * are hidden from listings; show the original instead.
    */
   duplicate_of?: string;
+  /** Kenyan county (official name) and ward, when the reporter gave them. */
+  county?: string;
+  ward?: string;
 }
 
 /** Body of POST /api/reports. */
@@ -94,7 +99,13 @@ export interface NewReportInput {
   location: Location;
   category: ReportCategory;
   note: string;
+  /** Optional Kenyan county; a ward needs one. */
+  county?: KenyaCounty;
+  ward?: string;
 }
+
+/** What a reporter fills in; the location comes from the map. */
+export type NewReportDetails = Omit<NewReportInput, 'location'>;
 
 export interface TokenPair {
   account_id: string;

@@ -28,6 +28,26 @@ export const REPORT_CATEGORIES: readonly { value: ReportCategory; label: string 
 export const MAX_LOCATION_NAME_BYTES = 200;
 export const MAX_NOTE_BYTES = 2000;
 
+export const MAX_WARD_BYTES = 100;
+
+/**
+ * Kenya's 47 counties in official code order (1 Mombasa to 47 Nairobi).
+ * Keep in sync with KenyaCounties in aurarisk-backend/internal/services/kenya.go.
+ */
+export const KENYA_COUNTIES = [
+  'Mombasa', 'Kwale', 'Kilifi', 'Tana River', 'Lamu', 'Taita-Taveta', 'Garissa', 'Wajir', 'Mandera',
+  'Marsabit', 'Isiolo', 'Meru', 'Tharaka-Nithi', 'Embu', 'Kitui', 'Machakos', 'Makueni', 'Nyandarua',
+  'Nyeri', 'Kirinyaga', "Murang'a", 'Kiambu', 'Turkana', 'West Pokot', 'Samburu', 'Trans Nzoia',
+  'Uasin Gishu', 'Elgeyo-Marakwet', 'Nandi', 'Baringo', 'Laikipia', 'Nakuru', 'Narok', 'Kajiado',
+  'Kericho', 'Bomet', 'Kakamega', 'Vihiga', 'Bungoma', 'Busia', 'Siaya', 'Kisumu', 'Homa Bay',
+  'Migori', 'Kisii', 'Nyamira', 'Nairobi',
+] as const;
+
+export type KenyaCounty = (typeof KENYA_COUNTIES)[number];
+
+/** Counties sorted by name, for pickers. */
+export const KENYA_COUNTIES_SORTED: readonly KenyaCounty[] = [...KENYA_COUNTIES].sort((a, b) => a.localeCompare(b));
+
 export const DEFAULT_REPORT_RADIUS_KM = 10;
 
 /**
