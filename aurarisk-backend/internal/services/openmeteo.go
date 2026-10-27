@@ -29,6 +29,15 @@ const (
 	OpenMeteoFreeURL = "https://api.open-meteo.com/v1/forecast"
 	// Paid plans use this host with an apikey parameter.
 	OpenMeteoCustomerURL = "https://customer-api.open-meteo.com/v1/forecast"
+
+	// Ground elevation (Copernicus DEM) and GloFAS river discharge.
+	OpenMeteoElevationFreeURL     = "https://api.open-meteo.com/v1/elevation"
+	OpenMeteoElevationCustomerURL = "https://customer-api.open-meteo.com/v1/elevation"
+	OpenMeteoFloodFreeURL         = "https://flood-api.open-meteo.com/v1/flood"
+	OpenMeteoFloodCustomerURL     = "https://customer-flood-api.open-meteo.com/v1/flood"
+	// Historical weather (ERA5 reanalysis), for offline evaluation.
+	OpenMeteoArchiveFreeURL     = "https://archive-api.open-meteo.com/v1/archive"
+	OpenMeteoArchiveCustomerURL = "https://customer-archive-api.open-meteo.com/v1/archive"
 )
 
 type OpenMeteoResponse struct {
@@ -49,6 +58,8 @@ type OpenMeteoResponse struct {
 		Precipitation []float64 `json:"precipitation"`
 		Rain          []float64 `json:"rain"`
 		SoilMoisture  []float64 `json:"soil_moisture_0_to_7cm"`
+		// Only requested from the Historical Weather API (FetchArchive).
+		WeatherCode []int `json:"weather_code,omitempty"`
 	} `json:"hourly"`
 }
 
@@ -59,28 +70,77 @@ var ErrRateLimited = errors.New("weather API rate limit reached")
 // OpenMeteoClient fetches forecasts with per-attempt timeouts and retries
 // transient failures (network errors and 5xx) with jittered backoff.
 type OpenMeteoClient struct {
-	URL      string // defaults to OpenMeteoFreeURL, or the customer URL when APIKey is set
-	APIKey   string // paid plans only
-	HTTP     *http.Client
-	Attempts int           // total attempts, default 3
-	Timeout  time.Duration // per attempt, default 5s
-	Backoff  time.Duration // first retry delay, doubled each time, default 300ms
+	URL    string // defaults to OpenMeteoFreeURL, or the customer URL when APIKey is set
+	APIKey string // paid plans only
+	// Elevation, Flood and Historical Weather API endpoints, defaulting like URL.
+	ElevationURL string
+	FloodURL     string
+	ArchiveURL   string
+	HTTP         *http.Client
+	Attempts     int           // total attempts, default 3
+	Timeout      time.Duration // per attempt, default 5s
+	Backoff      time.Duration // first retry delay, doubled each time, default 300ms
 }
 
 func (c *OpenMeteoClient) endpoint() string {
+	return c.pick(c.URL, OpenMeteoFreeURL, OpenMeteoCustomerURL)
+}
+
+func (c *OpenMeteoClient) pick(configured, free, customer string) string {
 	switch {
-	case c.URL != "":
-		return c.URL
+	case configured != "":
+		return configured
 	case c.APIKey != "":
-		return OpenMeteoCustomerURL
+		return customer
 	default:
-		return OpenMeteoFreeURL
+		return free
 	}
 }
 
 // Fetch returns current conditions, historicalDays of hourly history, and
 // forecastDays of hourly forecast.
 func (c *OpenMeteoClient) Fetch(ctx context.Context, lat, lon float64) (*OpenMeteoResponse, error) {
+	q := url.Values{}
+	q.Set("latitude", fmt.Sprintf("%.6f", lat))
+	q.Set("longitude", fmt.Sprintf("%.6f", lon))
+	q.Set("past_days", fmt.Sprint(historicalDays))
+	q.Set("forecast_days", fmt.Sprint(forecastDays))
+	q.Set("current", "temperature_2m,relative_humidity_2m,precipitation,rain,weather_code")
+	q.Set("hourly", "precipitation,rain,soil_moisture_0_to_7cm")
+	q.Set("timezone", "auto")
+
+	var data OpenMeteoResponse
+	if err := c.get(ctx, "forecast", c.endpoint(), q, &data); err != nil {
+		return nil, err
+	}
+	if observedAt, ok := data.ObservedAt(); ok {
+		metrics.ObserveWeatherAge(time.Since(observedAt))
+	}
+	return &data, nil
+}
+
+// FetchArchive returns hourly ERA5 reanalysis weather from start to end
+// (YYYY-MM-DD, local days), for offline evaluation. Current conditions are
+// left empty; the caller sets them for the hour it evaluates.
+func (c *OpenMeteoClient) FetchArchive(ctx context.Context, lat, lon float64, start, end string) (*OpenMeteoResponse, error) {
+	q := url.Values{}
+	q.Set("latitude", fmt.Sprintf("%.6f", lat))
+	q.Set("longitude", fmt.Sprintf("%.6f", lon))
+	q.Set("start_date", start)
+	q.Set("end_date", end)
+	q.Set("hourly", "precipitation,rain,soil_moisture_0_to_7cm,weather_code")
+	q.Set("timezone", "auto")
+
+	var data OpenMeteoResponse
+	if err := c.get(ctx, "archive", c.pick(c.ArchiveURL, OpenMeteoArchiveFreeURL, OpenMeteoArchiveCustomerURL), q, &data); err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
+// get calls one Open-Meteo API and decodes its JSON answer into out,
+// retrying transient failures. operation labels the provider metrics.
+func (c *OpenMeteoClient) get(ctx context.Context, operation, endpoint string, q url.Values, out any) error {
 	attempts := c.Attempts
 	if attempts <= 0 {
 		attempts = 3
@@ -89,12 +149,15 @@ func (c *OpenMeteoClient) Fetch(ctx context.Context, lat, lon float64) (*OpenMet
 	if backoff <= 0 {
 		backoff = 300 * time.Millisecond
 	}
+	if c.APIKey != "" {
+		q.Set("apikey", c.APIKey)
+	}
 
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
-		data, retryable, err := c.fetchOnce(ctx, lat, lon)
+		retryable, err := c.getOnce(ctx, operation, endpoint, q, out)
 		if err == nil {
-			return data, nil
+			return nil
 		}
 		lastErr = err
 		if !retryable || attempt == attempts {
@@ -104,15 +167,15 @@ func (c *OpenMeteoClient) Fetch(ctx context.Context, lat, lon float64) (*OpenMet
 		delay := time.Duration(rand.Int63n(int64(backoff) << (attempt - 1)))
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return ctx.Err()
 		case <-time.After(delay):
 		}
 	}
-	return nil, lastErr
+	return lastErr
 }
 
-func (c *OpenMeteoClient) fetchOnce(ctx context.Context, lat, lon float64) (_ *OpenMeteoResponse, retryable bool, err error) {
-	defer metrics.ObserveProvider(metrics.ProviderOpenMeteo, "forecast", time.Now(), &err)
+func (c *OpenMeteoClient) getOnce(ctx context.Context, operation, endpoint string, q url.Values, out any) (retryable bool, err error) {
+	defer metrics.ObserveProvider(metrics.ProviderOpenMeteo, operation, time.Now(), &err)
 
 	timeout := c.Timeout
 	if timeout <= 0 {
@@ -121,21 +184,9 @@ func (c *OpenMeteoClient) fetchOnce(ctx context.Context, lat, lon float64) (_ *O
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	q := url.Values{}
-	q.Set("latitude", fmt.Sprintf("%.6f", lat))
-	q.Set("longitude", fmt.Sprintf("%.6f", lon))
-	q.Set("past_days", fmt.Sprint(historicalDays))
-	q.Set("forecast_days", fmt.Sprint(forecastDays))
-	q.Set("current", "temperature_2m,relative_humidity_2m,precipitation,rain,weather_code")
-	q.Set("hourly", "precipitation,rain,soil_moisture_0_to_7cm")
-	q.Set("timezone", "auto")
-	if c.APIKey != "" {
-		q.Set("apikey", c.APIKey)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.endpoint()+"?"+q.Encode(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+q.Encode(), nil)
 	if err != nil {
-		return nil, false, err
+		return false, err
 	}
 	req.Header.Set("User-Agent", "AuraRisk/1.0 (+https://github.com/iochieng1/Aura-Risk)")
 
@@ -148,34 +199,29 @@ func (c *OpenMeteoClient) fetchOnce(ctx context.Context, lat, lon float64) (_ *O
 		// Transport errors embed the request URL; keep the API key out of logs.
 		var urlErr *url.Error
 		if errors.As(err, &urlErr) {
-			urlErr.URL = c.endpoint()
+			urlErr.URL = endpoint
 		}
 		// The caller giving up is final; a timeout or network error may pass.
 		if errors.Is(err, context.Canceled) {
-			return nil, false, err
+			return false, err
 		}
-		return nil, true, fmt.Errorf("failed to fetch weather data: %w", err)
+		return true, fmt.Errorf("failed to fetch %s data: %w", operation, err)
 	}
 	defer resp.Body.Close()
 
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests:
-		return nil, false, fmt.Errorf("%w: %s", ErrRateLimited, errorReason(resp.Body))
+		return false, fmt.Errorf("%w: %s", ErrRateLimited, errorReason(resp.Body))
 	case resp.StatusCode >= 500:
-		return nil, true, fmt.Errorf("weather API returned status %d: %s", resp.StatusCode, errorReason(resp.Body))
+		return true, fmt.Errorf("%s API returned status %d: %s", operation, resp.StatusCode, errorReason(resp.Body))
 	case resp.StatusCode != http.StatusOK:
-		return nil, false, fmt.Errorf("weather API returned status %d: %s", resp.StatusCode, errorReason(resp.Body))
+		return false, fmt.Errorf("%s API returned status %d: %s", operation, resp.StatusCode, errorReason(resp.Body))
 	}
 
-	var data OpenMeteoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, true, fmt.Errorf("failed to decode weather data: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return true, fmt.Errorf("failed to decode %s data: %w", operation, err)
 	}
-
-	if observedAt, ok := data.ObservedAt(); ok {
-		metrics.ObserveWeatherAge(time.Since(observedAt))
-	}
-	return &data, false, nil
+	return false, nil
 }
 
 // ObservedAt returns when the current conditions were valid. Open-Meteo

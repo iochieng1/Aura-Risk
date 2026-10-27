@@ -13,13 +13,31 @@ import (
 // ModelVersion identifies the scoring logic in every assessment. Bump it
 // whenever the score's inputs, weights, or thresholds change, so stored or
 // compared assessments can be told apart.
-const ModelVersion = "heuristic-1"
+const ModelVersion = "heuristic-2"
 
 // forecastHours is how far ahead the score looks. openmeteo.go requests
 // enough forecast days that these hours always exist.
 const forecastHours = 6
 
-func CalculateRiskScore(lat, lon float64, weather *OpenMeteoResponse) int {
+// Ground and river terms. These are hand-picked like the rest of the score
+// and are to be tuned by the backtest (#22, #58).
+const (
+	// A point this many metres below its surroundings gets the full
+	// low-lying score.
+	fullDepressionMetres = 15
+	maxLowLyingScore     = 10
+	// Forecast peaks below this aren't scored, and baselines below it are
+	// raised to it: GloFAS doesn't resolve small streams well, and a
+	// near-dry baseline would turn the first rains into a flood signal.
+	minRiverDischarge = 10.0
+	// Forecast peak over baseline: no score up to riverRatioStart, the full
+	// score from riverRatioFull.
+	riverRatioStart = 1.5
+	riverRatioFull  = 4.0
+	maxRiverScore   = 20
+)
+
+func CalculateRiskScore(weather *OpenMeteoResponse, h Hydrology) int {
 	precip := weather.Hourly.Precipitation
 	// Hourly precipitation is the total for the hour ending at that time, so
 	// index now covers the last hour and now+1.. are the hours ahead.
@@ -37,8 +55,6 @@ func CalculateRiskScore(lat, lon float64, weather *OpenMeteoResponse) int {
 	antecedentRainScore := math.Min(20, antecedent48h/50*20) + math.Min(15, antecedent7d/150*15)
 	soilMoistureScore := soilMoistureRiskScore(weather.Hourly.SoilMoisture, now+1)
 
-	terrainFactor := math.Abs(math.Sin(lat*100)*math.Cos(lon*100)) * 20
-
 	weatherSeverity := 0.0
 	switch {
 	case weather.Current.WeatherCode >= 95:
@@ -49,10 +65,30 @@ func CalculateRiskScore(lat, lon float64, weather *OpenMeteoResponse) int {
 		weatherSeverity = 10
 	}
 
-	rawScore := baseScore + forecastScore + antecedentRainScore + soilMoistureScore + terrainFactor + weatherSeverity
+	rawScore := baseScore + forecastScore + antecedentRainScore + soilMoistureScore +
+		lowLyingScore(h.Terrain) + riverScore(h.River) + weatherSeverity
 	score := int(math.Min(100, math.Max(0, rawScore)))
 
 	return score
+}
+
+// lowLyingScore rewards ground lower than its surroundings, where water
+// collects.
+func lowLyingScore(t *Terrain) float64 {
+	if t == nil {
+		return 0
+	}
+	return math.Min(maxLowLyingScore, math.Max(0, t.Depression)/fullDepressionMetres*maxLowLyingScore)
+}
+
+// riverScore rises as the nearby river's forecast peak exceeds its recent
+// baseline.
+func riverScore(r *RiverFlow) float64 {
+	if r == nil || r.Peak < minRiverDischarge {
+		return 0
+	}
+	ratio := r.Peak / math.Max(r.Baseline, minRiverDischarge)
+	return math.Min(maxRiverScore, math.Max(0, (ratio-riverRatioStart)/(riverRatioFull-riverRatioStart)*maxRiverScore))
 }
 
 // currentHourIndex returns the index in the hourly series of the hour that
@@ -154,6 +190,21 @@ func SetWeatherService(s *WeatherService) {
 	weatherService = s
 }
 
+// hydrologyService supplies ground and river inputs; nil leaves them out.
+var hydrologyService *HydrologyService
+
+// SetHydrologyService sets the ground and river source. Call it before serving.
+func SetHydrologyService(s *HydrologyService) {
+	hydrologyService = s
+}
+
+func getHydrology(ctx context.Context, lat, lon float64) (Hydrology, bool) {
+	if hydrologyService == nil {
+		return Hydrology{}, false
+	}
+	return hydrologyService.Get(ctx, lat, lon), true
+}
+
 // WeatherCircuitOpen reports whether weather calls are suspended after
 // repeated provider failures (risk lookups fall back to cached data).
 func WeatherCircuitOpen() bool {
@@ -164,28 +215,39 @@ func WeatherCircuitOpen() bool {
 // provider is failing it may use cached data, in which case the result is
 // marked Stale. It returns ErrWeatherUnavailable when there is nothing to use.
 func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName string) (*models.RiskAssessment, error) {
+	// Weather and the ground and river inputs are fetched concurrently.
+	hydrology := make(chan Hydrology, 1)
+	configured := hydrologyService != nil
+	go func() {
+		h, _ := getHydrology(ctx, lat, lon)
+		hydrology <- h
+	}()
 	w, err := weatherService.Get(ctx, lat, lon)
 	if err != nil {
 		return nil, err
 	}
-	return assess(lat, lon, locationName, w, time.Now()), nil
+	return assess(lat, lon, locationName, w, <-hydrology, configured, time.Now()), nil
 }
 
 // AssessClientWeather scores weather the client fetched from Open-Meteo
 // itself, for when the server's own calls are refused (e.g. a shared egress
 // IP over the free API's daily limit). The data is checked with
 // ValidateClientWeather first; it is never cached or used for push alerts.
-func AssessClientWeather(lat, lon float64, locationName string, weather *OpenMeteoResponse, now time.Time) *models.RiskAssessment {
-	risk := assess(lat, lon, locationName, WeatherResult{Data: weather, FetchedAt: now}, now)
+// Ground and river inputs are still the server's own.
+func AssessClientWeather(ctx context.Context, lat, lon float64, locationName string, weather *OpenMeteoResponse, now time.Time) *models.RiskAssessment {
+	h, configured := getHydrology(ctx, lat, lon)
+	risk := assess(lat, lon, locationName, WeatherResult{Data: weather, FetchedAt: now}, h, configured, now)
 	risk.Confidence.Reasons = append(risk.Confidence.Reasons,
 		"Weather data was fetched by your device rather than the AuraRisk server.")
 	return risk
 }
 
-func assess(lat, lon float64, locationName string, w WeatherResult, now time.Time) *models.RiskAssessment {
+// assess scores the inputs. hydrologyConfigured is false when no ground and
+// river source is set up (as in some tests), so their absence isn't reported.
+func assess(lat, lon float64, locationName string, w WeatherResult, h Hydrology, hydrologyConfigured bool, now time.Time) *models.RiskAssessment {
 	weather := w.Data
 
-	score := CalculateRiskScore(lat, lon, weather)
+	score := CalculateRiskScore(weather, h)
 	level := ScoreToLevel(score)
 	tips := GetTips(level)
 
@@ -209,7 +271,8 @@ func assess(lat, lon float64, locationName string, w WeatherResult, now time.Tim
 			WeatherFetchedAt:  w.FetchedAt.UTC(),
 			WeatherObservedAt: observedAt(weather),
 		},
-		Confidence:   AssessConfidence(weather, w.Stale, now),
+		Hydrology:    hydrologySummary(h),
+		Confidence:   AssessConfidence(weather, w.Stale, now, hydrologyGaps(h, hydrologyConfigured)...),
 		ModelVersion: ModelVersion,
 	}
 }
@@ -221,4 +284,33 @@ func observedAt(weather *OpenMeteoResponse) *time.Time {
 	}
 	t = t.UTC()
 	return &t
+}
+
+func hydrologySummary(h Hydrology) *models.Hydrology {
+	if h.Terrain == nil && h.River == nil {
+		return nil
+	}
+	out := &models.Hydrology{}
+	if t := h.Terrain; t != nil {
+		out.ElevationM, out.DepressionM = &t.Elevation, &t.Depression
+	}
+	if r := h.River; r != nil {
+		out.RiverBaselineM3s, out.RiverPeakM3s = &r.Baseline, &r.Peak
+	}
+	return out
+}
+
+// hydrologyGaps lists the ground and river inputs that couldn't be had.
+func hydrologyGaps(h Hydrology, configured bool) []string {
+	if !configured {
+		return nil
+	}
+	var gaps []string
+	if h.Terrain == nil {
+		gaps = append(gaps, "Ground elevation is unavailable, so low-lying ground isn't scored.")
+	}
+	if h.River == nil {
+		gaps = append(gaps, "The river discharge forecast is unavailable, so nearby rivers aren't scored.")
+	}
+	return gaps
 }

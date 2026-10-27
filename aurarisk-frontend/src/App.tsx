@@ -9,7 +9,19 @@ import MapView from "./components/MapView";
 import MapListAlternative, { MAP_LIST_ID } from "./components/MapListAlternative";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 
-const DEFAULT_CENTER: [number, number] = [120.9842, 14.5995];
+// Kisumu, Kenya: the first pilot area (#56). VITE_DEFAULT_CENTER ("lat,lon")
+// moves the map elsewhere without a code change.
+const KISUMU: [number, number] = [34.768, -0.0917];
+const DEFAULT_CENTER = parseCenter(import.meta.env.VITE_DEFAULT_CENTER) ?? KISUMU;
+
+/** Parses "lat,lon" into the map's [lon, lat] order. */
+function parseCenter(value: string | undefined): [number, number] | null {
+  const parts = (value ?? "").split(",").map((part) => part.trim());
+  if (parts.length !== 2 || parts.some((part) => part === "")) return null;
+  const [lat, lon] = parts.map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return [lon, lat];
+}
 
 export default function App() {
   const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER);

@@ -119,10 +119,17 @@ export function isRiskAssessment(v: unknown): v is RiskAssessment {
     v.tips.every((t) => typeof t === 'string') &&
     (v.stale === undefined || typeof v.stale === 'boolean') &&
     (v.source_timestamps === undefined || isSourceTimestamps(v.source_timestamps)) &&
+    (v.hydrology === undefined || isHydrology(v.hydrology)) &&
     (v.confidence === undefined || isConfidence(v.confidence)) &&
     (v.model_version === undefined || typeof v.model_version === 'string')
   );
 }
+
+const isHydrology = (v: unknown): boolean =>
+  isRecord(v) &&
+  ['elevation_m', 'depression_m', 'river_baseline_m3s', 'river_peak_m3s'].every(
+    (key) => v[key] === undefined || isFiniteNumber(v[key]),
+  );
 
 const isSourceTimestamps = (v: unknown): boolean =>
   isRecord(v) &&

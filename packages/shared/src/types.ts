@@ -33,6 +33,18 @@ export interface RiskSourceTimestamps {
   weather_observed_at?: string;
 }
 
+/** Each field is absent when its input was unavailable. */
+export interface RiskHydrology {
+  /** Ground elevation, in metres. */
+  elevation_m?: number;
+  /** How far the point lies below its ~1 km surroundings, in metres. */
+  depression_m?: number;
+  /** Nearby main river: median discharge over the past 92 days, in m³/s. */
+  river_baseline_m3s?: number;
+  /** Highest daily discharge forecast for the next 3 days, in m³/s. */
+  river_peak_m3s?: number;
+}
+
 export interface RiskAssessment {
   location: Location;
   score: number;
@@ -42,8 +54,10 @@ export interface RiskAssessment {
   /** True when live weather was unavailable and cached data was used. Absent from older backends. */
   stale?: boolean;
   source_timestamps?: RiskSourceTimestamps;
+  /** Ground and river data behind the score, when available. */
+  hydrology?: RiskHydrology;
   confidence?: RiskConfidence;
-  /** Scoring logic that produced the score, e.g. "heuristic-1". */
+  /** Scoring logic that produced the score, e.g. "heuristic-2". */
   model_version?: string;
 }
 

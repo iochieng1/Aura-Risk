@@ -16,10 +16,21 @@ the decision-support notice.
 | Rain in the last 48 h and 7 days | Open-Meteo `past_days` | Real data |
 | Topsoil moisture (0–7 cm) | Open-Meteo `soil_moisture_0_to_7cm` | Real data |
 | Thunderstorm / heavy-shower weather code | Open-Meteo `current.weather_code` | Real data |
-| **Terrain factor (up to 20 points)** | `abs(sin(lat*100) * cos(lon*100)) * 20` | **Placeholder. Not related to the ground at all** |
+| Low-lying ground (up to 10 points) | Open-Meteo Elevation API: the point against 8 points ~1 km around it | Real data (since `heuristic-2`, [#57](https://github.com/iochieng1/Aura-Risk/issues/57)) |
+| River discharge (up to 20 points) | Open-Meteo Flood API (GloFAS): forecast peak against the 92-day median of the main river nearby | Real data (since `heuristic-2`) |
 
-The terrain factor looks random from place to place, and it can add up to a
-fifth of the score. Replacing it is the single most valuable change.
+`heuristic-1` had a placeholder terrain factor, `abs(sin(lat*100) *
+cos(lon*100)) * 20`, unrelated to the ground; `heuristic-2` replaced it with
+the two terms above.
+
+Known limits of the new terms, for the backtest to check:
+- Comparing with the past 92 days is not a return period: in a long wet
+  season the baseline rises, and a sustained flood scores less. Baselines
+  are raised to at least 10 m³/s so the first rains on a dry river aren't a
+  flood signal.
+- A flat floodplain (such as the Kano plains) isn't a depression at ~1 km,
+  so low-lying ground there scores little; height above the nearest river
+  (part 2) would capture it.
 
 All weights and thresholds (e.g. `antecedent48h/50*20`) are hand-picked and
 have never been compared with observed floods.
@@ -75,20 +86,27 @@ Validation needs to know where and when it actually flooded.
 | Global Flood Database (satellite-mapped flood extents) | Worldwide, historical events |
 | Copernicus Emergency Management Service rapid mapping | Major disasters worldwide |
 | Dartmouth Flood Observatory, EM-DAT | Event lists with dates and areas |
+| **Kenya Red Cross** situation reports and **ReliefWeb** (OCHA) flash updates | Kenya; dated, named places for each flood event, e.g. the March–May 2024 long rains |
+| **Kenya Meteorological Department** (KMD) forecasts and advisories | Kenya; the official warnings to compare the score with |
+| **NDMA** early warning bulletins | Kenya, monthly per county; drought-focused, with flood notes |
+| **Water Resources Authority** river gauges | Kenya; gauge records for rivers such as the Nzoia and Nyando, on request |
+| **County disaster management offices** | Kenya; local incident logs, e.g. Kisumu County for the Kano plains |
 | **UP NOAH** flood hazard maps (5-, 25- and 100-year return periods) | Philippines |
 | **HazardHunterPH / GeoRiskPH** (DOST-PHIVOLCS) | Philippines hazard layers |
 | PAGASA rainfall and river bulletins | Philippines; check what is available as data |
 | AuraRisk's own verified community reports | Grows over time; biased toward populated areas |
 
-The web map defaults to Manila. If another region launches first, find the
-matching national hazard maps and agency data.
+Kenya is the launch region, starting with Kisumu
+([#56](https://github.com/iochieng1/Aura-Risk/issues/56)), so its sources come
+first. The Philippine sources stay for a later region.
 
 ## Calibration plan
 
 1. **Replace the terrain placeholder** with elevation and height above the
    nearest drainage line, and add GloFAS river discharge as an input. Bump
    `model_version` (e.g. `heuristic-2`).
-2. **Build a backtest.** An offline script (not in the API path) that:
+2. **Build a backtest.** Done: `cmd/backtest`, see [BACKTEST.md](BACKTEST.md)
+   for usage and the first Kenya results. An offline tool (not in the API path) that:
    - picks past flood events and an equal number of dry and wet non-flood days
      for the same places;
    - fetches ERA5 rainfall and river discharge for those dates;

@@ -52,7 +52,7 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 | Issue | Status | Plan |
 |---|---|---|
-| [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | Open: release gate | [docs/RISK_DATA_SOURCES.md](docs/RISK_DATA_SOURCES.md): replace the placeholder terrain factor, add river discharge, backtest against past floods |
+| [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | Open: release gate | [docs/RISK_DATA_SOURCES.md](docs/RISK_DATA_SOURCES.md): real elevation and river discharge (#57), then a backtest against past floods (#58) |
 | [#18 PostGIS spatial queries](https://github.com/iochieng1/Aura-Risk/issues/18) | Open | Radius search instead of bounding boxes; also stores the terrain layers for #22 |
 | [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | Open: release gate | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): free demo on Render now (`render.yaml`); AWS or DigitalOcean for a real launch |
 | [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | Mostly done | CI runs on every PR; remaining: require it to pass before merging, and database-failure tests |
@@ -66,7 +66,7 @@ All issues: [open](https://github.com/iochieng1/Aura-Risk/issues) · [closed](ht
 This project includes a Go backend that exposes weather-risk and community-report APIs. The backend was verified to start successfully with PostgreSQL running locally.
 
 ### Prerequisites
-- Go 1.27+ (`go.mod` pins 1.27.2; with `GOTOOLCHAIN=auto`, the default, an older `go` downloads it)
+- Go 1.27+ (`go.mod` pins 1.27.3; with `GOTOOLCHAIN=auto`, the default, an older `go` downloads it)
 - Docker and Docker Compose
 - PostgreSQL (provided by the included Compose setup)
 

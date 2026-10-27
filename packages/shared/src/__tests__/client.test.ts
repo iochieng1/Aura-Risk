@@ -49,12 +49,21 @@ describe('createApiClient', () => {
       stale: false,
       source_timestamps: { weather_fetched_at: '2026-10-07T12:00:00Z' },
       confidence: { level: 'medium', reasons: ['Not yet validated.'] },
-      model_version: 'heuristic-1',
+      model_version: 'heuristic-2',
     };
     const ok = createApiClient({ baseUrl: '', fetch: async () => json(withMeta) });
     expect((await ok.getRisk({ lat: 0, lon: 0 })).confidence?.level).toBe('medium');
 
     const bad = createApiClient({ baseUrl: '', fetch: async () => json({ ...withMeta, confidence: { level: 'certain' } }) });
+    await expect(bad.getRisk({ lat: 0, lon: 0 })).rejects.toBeInstanceOf(MalformedResponseError);
+  });
+
+  it('accepts partial hydrology and rejects non-numeric values', async () => {
+    const withHydrology = { ...risk, hydrology: { elevation_m: 1151, river_peak_m3s: 60.9 } };
+    const ok = createApiClient({ baseUrl: '', fetch: async () => json(withHydrology) });
+    expect((await ok.getRisk({ lat: 0, lon: 0 })).hydrology?.river_peak_m3s).toBe(60.9);
+
+    const bad = createApiClient({ baseUrl: '', fetch: async () => json({ ...risk, hydrology: { elevation_m: '1151' } }) });
     await expect(bad.getRisk({ lat: 0, lon: 0 })).rejects.toBeInstanceOf(MalformedResponseError);
   });
 
