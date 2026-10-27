@@ -105,7 +105,8 @@ first. The Philippine sources stay for a later region.
 1. **Replace the terrain placeholder** with elevation and height above the
    nearest drainage line, and add GloFAS river discharge as an input. Bump
    `model_version` (e.g. `heuristic-2`).
-2. **Build a backtest.** An offline script (not in the API path) that:
+2. **Build a backtest.** Done: `cmd/backtest`, see [BACKTEST.md](BACKTEST.md)
+   for usage and the first Kenya results. An offline tool (not in the API path) that:
    - picks past flood events and an equal number of dry and wet non-flood days
      for the same places;
    - fetches ERA5 rainfall and river discharge for those dates;

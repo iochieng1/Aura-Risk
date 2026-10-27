@@ -1,0 +1,41 @@
+region,place,lat,lon,date,flooded,source
+nairobi,Mathare,-1.2584,36.8713,2024-04-23,yes,https://citizen.digital/article/nairobi-floods-appeal-for-help-as-lobby-groups-youth-lead-rescue-in-mathare-n341086
+nairobi,Mathare North,-1.2535,36.8678,2024-04-23,yes,https://eastleighvoice.co.ke/mathare%20floods/36478/floods-sweep-through-mathare-north-leaving-hundreds-homeless
+nairobi,Githurai,-1.2028,36.9169,2024-04-23,yes,https://www.africanews.com/amp/2024/04/24/nairobi-residents-grapple-with-floods-aftermath/
+nairobi,Ngando,-1.3010,36.7399,2024-04-23,yes,https://www.africanews.com/amp/2024/04/24/nairobi-residents-grapple-with-floods-aftermath/
+nairobi,Mukuru Kwa Njenga,-1.3196,36.8865,2024-04-20,yes,https://k24.digital/uncategorized/parts-of-nairobi-marooned-by-floods/amp
+nairobi,Mukuru Kayaba,-1.3124,36.8462,2024-04-20,yes,https://k24.digital/uncategorized/parts-of-nairobi-marooned-by-floods/amp
+nairobi,Fuata Nyayo (South B),-1.3081,36.8403,2024-04-20,yes,https://k24.digital/uncategorized/parts-of-nairobi-marooned-by-floods/amp
+kisumu,Ayweyo (Nyando),-0.2121,34.9847,2024-04-16,yes,https://www.the-star.co.ke/news/2024-04-19-one-dead-1000-households-displaced-by-floods-in-nyanza/
+kisumu,Ahero,-0.1725,34.9190,2024-05-04,yes,https://citizen.digital/article/traffic-flow-restored-at-ahero-bridge-after-water-levels-reduce-n341580
+kisumu,Ombeyi,-0.1219,34.9255,2024-05-05,yes,https://www.kenyans.co.ke/news/100385-kisumu-county-govt-responds-7-villages-completely-submerge
+kisumu,Muhoroni,-0.1565,35.1875,2024-05-05,yes,https://www.kenyans.co.ke/news/100385-kisumu-county-govt-responds-7-villages-completely-submerge
+tana,Bula Punda (Garissa),-0.4493,39.6351,2024-04-27,yes,https://eastleighvoice.co.ke/garissa%20floods/37302/thousands-displaced-in-garissa-town-after-river-tana-bursts-banks
+tana,Kamor (Garissa),-0.4445,39.6349,2024-04-27,yes,https://eastleighvoice.co.ke/garissa%20floods/37302/thousands-displaced-in-garissa-town-after-river-tana-bursts-banks
+tana,Garissa town,-0.4567,39.6405,2024-05-06,yes,https://eastleighvoice.co.ke/heavy%20rains%20kenya/39684/red-cross-warns-garissa-residents-as-floods-intesify
+tana,Gamba,-2.2687,40.1804,2024-05-12,yes,https://mwananchi.co.tz/kenya/counties/tana-river/floods-force-evacuation-of-gamba-police-station-in-tana--4621700
+busia,Mabinju,0.0688,33.9929,2024-04-28,yes,https://thestandard.ke/sports/amp/opinion/article/2001495495/what-should-be-done-to-end-perennial-flooding-in-budalangi
+other,Mai Mahiu (Kamuchiri village),-0.9827,36.5857,2024-04-29,yes,https://citizen.digital/article/death-toll-in-mai-mahiu-flash-floods-rises-to-42-n341224
+other,Kitengela,-1.4745,36.9590,2024-04-30,yes,https://www.the-star.co.ke/counties/central/2024-05-01-10-family-members-trapped-as-torrential-rains-cause-anguish-in-kajiado
+other,Syokimau,-1.3777,36.9285,2024-04-20,yes,https://k24.digital/uncategorized/parts-of-nairobi-marooned-by-floods/amp
+other,Kobala (Homa Bay),-0.3510,34.7664,2024-04-11,yes,https://mwananchi.co.tz/kenya/counties/families-displaced-crops-destroyed-as-floods-wreak-havoc-in-western-kenya-4589140
+nairobi,Mathare,-1.2584,36.8713,2024-08-14,no,"control: dry season, no reports found"
+nairobi,Mathare North,-1.2535,36.8678,2024-08-14,no,"control: dry season, no reports found"
+nairobi,Githurai,-1.2028,36.9169,2024-07-17,no,"control: dry season, no reports found"
+nairobi,Ngando,-1.3010,36.7399,2024-08-14,no,"control: dry season, no reports found"
+nairobi,Mukuru Kwa Njenga,-1.3196,36.8865,2024-07-17,no,"control: dry season, no reports found"
+nairobi,Mukuru Kayaba,-1.3124,36.8462,2024-08-14,no,"control: dry season, no reports found"
+nairobi,Fuata Nyayo (South B),-1.3081,36.8403,2024-07-17,no,"control: dry season, no reports found"
+kisumu,Ayweyo (Nyando),-0.2121,34.9847,2024-08-14,no,"control: dry season, no reports found"
+kisumu,Ahero,-0.1725,34.9190,2024-07-17,no,"control: dry season, no reports found"
+kisumu,Ombeyi,-0.1219,34.9255,2024-08-14,no,"control: dry season, no reports found"
+kisumu,Muhoroni,-0.1565,35.1875,2024-07-17,no,"control: dry season, no reports found"
+tana,Bula Punda (Garissa),-0.4493,39.6351,2024-08-14,no,"control: dry season, no reports found"
+tana,Kamor (Garissa),-0.4445,39.6349,2024-07-17,no,"control: dry season, no reports found"
+tana,Garissa town,-0.4567,39.6405,2024-08-14,no,"control: dry season, no reports found"
+tana,Gamba,-2.2687,40.1804,2024-07-17,no,"control: dry season, no reports found"
+busia,Mabinju,0.0688,33.9929,2024-08-21,no,"control: dry season, no reports found"
+other,Mai Mahiu (Kamuchiri village),-0.9827,36.5857,2024-07-17,no,"control: dry season, no reports found"
+other,Kitengela,-1.4745,36.9590,2024-08-14,no,"control: dry season, no reports found"
+other,Syokimau,-1.3777,36.9285,2024-07-17,no,"control: dry season, no reports found"
+other,Kobala (Homa Bay),-0.3510,34.7664,2024-08-14,no,"control: dry season, no reports found"
