@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { DECISION_SUPPORT_NOTICE } from "@aurarisk/shared";
-import type { Location, RiskAssessment, CommunityReport, ReportCategory } from "./types";
+import type { Location, RiskAssessment, CommunityReport, NewReportDetails } from "./types";
 import { fetchRisk, fetchReports, submitReport } from "./api/risk";
 import { describeError } from "./api/errors";
 import Header from "./components/Header";
@@ -119,11 +119,11 @@ export default function App() {
 
   // Throws a user-facing message so the form can keep the note and show it.
   const handleSubmitReport = useCallback(
-    async (category: ReportCategory, note: string) => {
+    async (details: NewReportDetails) => {
       if (!selectedLocation) throw new Error("Choose a location first.");
       let newReport: CommunityReport;
       try {
-        newReport = await submitReport(selectedLocation, category, note);
+        newReport = await submitReport(selectedLocation, details);
       } catch (err) {
         console.error("Failed to submit report", err);
         throw new Error(describeError(err));

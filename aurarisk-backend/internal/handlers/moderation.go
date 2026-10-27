@@ -60,7 +60,7 @@ func RequireModerator() gin.HandlerFunc {
 const moderationReportColumns = `
 	r.id, r.location_name, r.lat, r.lon, r.category, r.note, r.created_at,
 	r.moderation_status, r.corroboration_count, r.duplicate_of, r.verification_score,
-	r.account_id, r.moderated_by, r.moderation_reason, r.status_updated_at,
+	r.account_id, r.moderated_by, r.moderation_reason, r.status_updated_at, r.county, r.ward,
 	(SELECT COUNT(*) FROM community_reports h
 		WHERE r.account_id IS NOT NULL AND h.account_id = r.account_id AND h.id <> r.id
 		AND h.moderation_status = 'verified' AND h.moderated_by <> 'auto'),
@@ -73,7 +73,7 @@ func scanModerationReport(row interface{ Scan(...any) error }) (models.Moderatio
 	err := row.Scan(
 		&r.ID, &r.Location.Name, &r.Location.Lat, &r.Location.Lon, &r.Category, &r.Note, &r.Timestamp,
 		&r.Status, &r.Corroborations, &r.DuplicateOf, &r.VerificationScore,
-		&r.AccountID, &r.ModeratedBy, &r.ModerationReason, &r.StatusUpdatedAt,
+		&r.AccountID, &r.ModeratedBy, &r.ModerationReason, &r.StatusUpdatedAt, &r.County, &r.Ward,
 		&r.ReporterVerified, &r.ReporterRejected,
 	)
 	r.Photos = []models.ReportPhoto{}

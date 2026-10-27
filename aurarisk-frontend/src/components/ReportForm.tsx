@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { CommunityReport, Location, ReportCategory } from "../types";
+import { KENYA_COUNTIES_SORTED, MAX_WARD_BYTES, type KenyaCounty } from "@aurarisk/shared";
+import type { CommunityReport, Location, NewReportDetails, ReportCategory } from "../types";
 
 const CATEGORIES: { value: ReportCategory; label: string; icon: string }[] = [
   { value: "flooding", label: "Flooding", icon: "🌊" },
@@ -11,12 +12,15 @@ const CATEGORIES: { value: ReportCategory; label: string; icon: string }[] = [
 interface Props {
   location: Location | null;
   /** Rejects with a user-facing message on failure. */
-  onSubmit: (category: ReportCategory, note: string) => Promise<CommunityReport>;
+  onSubmit: (details: NewReportDetails) => Promise<CommunityReport>;
 }
 
 export default function ReportForm({ location, onSubmit }: Props) {
   const [category, setCategory] = useState<ReportCategory>("flooding");
   const [note, setNote] = useState("");
+  // County and ward are kept between reports: people usually report nearby.
+  const [county, setCounty] = useState<KenyaCounty | "">("");
+  const [ward, setWard] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -28,7 +32,12 @@ export default function ReportForm({ location, onSubmit }: Props) {
     setError(null);
     setNotice(null);
     try {
-      const report = await onSubmit(category, note.trim());
+      const report = await onSubmit({
+        category,
+        note: note.trim(),
+        ...(county && { county }),
+        ...(county && ward.trim() && { ward: ward.trim() }),
+      });
       // Only clear the note once the server has it, so a failure loses nothing.
       setNote("");
       setNotice(
@@ -70,6 +79,34 @@ export default function ReportForm({ location, onSubmit }: Props) {
           rows={2}
           className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
         />
+        <div className="grid grid-cols-2 gap-1.5">
+          <label className="text-[10px] text-gray-600">
+            County <span className="text-gray-400">(optional)</span>
+            <select
+              value={county}
+              onChange={(e) => setCounty(e.target.value as KenyaCounty | "")}
+              className="mt-0.5 w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Not sure</option>
+              {KENYA_COUNTIES_SORTED.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-[10px] text-gray-600">
+            Ward <span className="text-gray-400">(optional)</span>
+            <input
+              value={ward}
+              onChange={(e) => setWard(e.target.value)}
+              disabled={!county}
+              maxLength={MAX_WARD_BYTES}
+              placeholder={county ? "e.g. Nyalenda A" : "Choose a county"}
+              className="mt-0.5 w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+            />
+          </label>
+        </div>
         <button
           type="submit"
           disabled={!location || !note.trim() || submitting}

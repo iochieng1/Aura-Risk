@@ -2,6 +2,7 @@
 export type {
   CommunityReport,
   Location,
+  NewReportDetails,
   NewReportInput,
   ReportCategory,
   RiskAssessment,

@@ -37,7 +37,9 @@ export default function ReportList({ reports }: { reports: CommunityReport[] }) 
             <div className="min-w-0">
               <p className="text-xs text-gray-800 leading-snug">{r.note}</p>
               <p className="text-[10px] text-gray-400 mt-0.5 truncate">
-                {r.location.name} · {timeAgo(r.timestamp)} ·{" "}
+                {r.location.name}
+                {r.ward ? ` · ${r.ward}` : ""}
+                {r.county ? ` · ${r.county}` : ""} · {timeAgo(r.timestamp)} ·{" "}
                 {r.status === "verified" ? (
                   <span className="text-green-700 font-medium">Verified</span>
                 ) : (

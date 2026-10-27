@@ -1,4 +1,4 @@
-import { type Location, REPORT_CATEGORIES } from '@aurarisk/shared';
+import { KENYA_COUNTIES_SORTED, type KenyaCounty, type Location, MAX_WARD_BYTES, REPORT_CATEGORIES } from '@aurarisk/shared';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ReportRejectedError, ReportValidationError, submitReport } from '../services/api';
@@ -14,6 +14,13 @@ interface Props {
 export default function ReportComposer({ location, onSubmitted }: Props) {
   const [category, setCategory] = useState<ReportCategory>('flooding');
   const [note, setNote] = useState('');
+  // County and ward stay between reports: people usually report nearby.
+  const [county, setCounty] = useState<KenyaCounty | null>(null);
+  const [countyQuery, setCountyQuery] = useState('');
+  const [ward, setWard] = useState('');
+  const countyMatches = countyQuery.trim()
+    ? KENYA_COUNTIES_SORTED.filter((c) => c.toLowerCase().startsWith(countyQuery.trim().toLowerCase())).slice(0, 6)
+    : [];
   const [photos, setPhotos] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -24,7 +31,8 @@ export default function ReportComposer({ location, onSubmitted }: Props) {
     setSubmitting(true);
     setStatus(null);
     try {
-      const result = await submitReport({ location, category, note }, photos);
+      const area = county ? { county, ...(ward.trim() && { ward: ward.trim() }) } : {};
+      const result = await submitReport({ location, category, note, ...area }, photos);
       setStatus(result.queued ? 'Saved. It will be sent when you are back online.' : 'Report sent. Photos appear after a safety check.');
       setNote('');
       setPhotos([]);
@@ -57,6 +65,36 @@ export default function ReportComposer({ location, onSubmitted }: Props) {
         ))}
       </View>
       <TextInput style={[styles.input, styles.note]} placeholder="What do you see?" value={note} onChangeText={setNote} multiline />
+      {county ? (
+        <View style={styles.countyRow}>
+          <Text>County: {county}</Text>
+          <Pressable onPress={() => { setCounty(null); setWard(''); }} accessibilityRole="button" accessibilityLabel={`Change county from ${county}`}>
+            <Text style={styles.link}>Change</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
+          <TextInput
+            style={styles.input}
+            placeholder="County (optional), e.g. Kisumu"
+            value={countyQuery}
+            onChangeText={setCountyQuery}
+            autoCorrect={false}
+          />
+          {countyMatches.length > 0 && (
+            <View style={styles.chips}>
+              {countyMatches.map((c) => (
+                <Pressable key={c} onPress={() => { setCounty(c); setCountyQuery(''); }} style={styles.chip} accessibilityRole="button">
+                  <Text>{c}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </>
+      )}
+      {county && (
+        <TextInput style={styles.input} placeholder="Ward (optional), e.g. Nyalenda A" value={ward} onChangeText={setWard} maxLength={MAX_WARD_BYTES} />
+      )}
       <PhotoAttachmentPicker photos={photos} onChange={setPhotos} />
       <Pressable
         style={[styles.button, (!location || submitting) && styles.disabled]}
@@ -84,4 +122,6 @@ const styles = StyleSheet.create({
   button: { backgroundColor: '#0b5cad', paddingVertical: 10, borderRadius: 6, alignItems: 'center' },
   buttonText: { color: '#fff', fontWeight: '600' },
   disabled: { opacity: 0.6 },
+  countyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  link: { color: '#0b5cad', fontWeight: '600' },
 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { Location, RiskAssessment, CommunityReport, ReportCategory } from "../types";
+import type { Location, RiskAssessment, CommunityReport, NewReportDetails } from "../types";
 import SearchBar from "./SearchBar";
 import RiskCard from "./RiskCard";
 import TipsList from "./TipsList";
@@ -23,7 +23,7 @@ interface Props {
   online: boolean;
   /** A message about the last action, e.g. a failed geolocation lookup. */
   notice: string | null;
-  onSubmitReport: (category: ReportCategory, note: string) => Promise<CommunityReport>;
+  onSubmitReport: (details: NewReportDetails) => Promise<CommunityReport>;
   open: boolean;
   onClose: () => void;
 }

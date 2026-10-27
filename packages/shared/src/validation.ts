@@ -1,4 +1,12 @@
-import { MAX_LOCATION_NAME_BYTES, MAX_NOTE_BYTES, REPORT_CATEGORIES, RISK_LEVELS } from './constants';
+import {
+  KENYA_COUNTIES,
+  MAX_LOCATION_NAME_BYTES,
+  MAX_NOTE_BYTES,
+  MAX_WARD_BYTES,
+  REPORT_CATEGORIES,
+  RISK_LEVELS,
+  type KenyaCounty,
+} from './constants';
 import type {
   CommunityReport,
   Coordinates,
@@ -32,6 +40,10 @@ export function utf8ByteLength(s: string): number {
 
 export function isReportCategory(v: unknown): v is ReportCategory {
   return REPORT_CATEGORIES.some((c) => c.value === v);
+}
+
+export function isKenyaCounty(v: unknown): v is KenyaCounty {
+  return KENYA_COUNTIES.includes(v as KenyaCounty);
 }
 
 export function isRiskLevel(v: unknown): v is RiskLevel {
@@ -80,8 +92,17 @@ export function validateNewReport(input: unknown): ValidationResult<NewReportInp
   if (!note) errors.note = 'Describe what you see.';
   else if (utf8ByteLength(note) > MAX_NOTE_BYTES) errors.note = 'Note is too long.';
 
+  const county = typeof input.county === 'string' ? input.county.trim() : '';
+  if (county && !isKenyaCounty(county)) errors.county = 'Choose a county from the list.';
+  const ward = typeof input.ward === 'string' ? input.ward.trim() : '';
+  if (ward && !county) errors.ward = 'Choose a county first.';
+  else if (utf8ByteLength(ward) > MAX_WARD_BYTES) errors.ward = 'Ward name is too long.';
+
   if (Object.keys(errors).length || !location.ok) return { ok: false, errors };
-  return { ok: true, value: { location: location.value, category: input.category as ReportCategory, note } };
+  const value: NewReportInput = { location: location.value, category: input.category as ReportCategory, note };
+  if (county) value.county = county as KenyaCounty;
+  if (ward) value.ward = ward;
+  return { ok: true, value };
 }
 
 const isLocation = (v: unknown): v is Location =>
@@ -122,6 +143,8 @@ export function isCommunityReport(v: unknown): v is CommunityReport {
     isReportCategory(v.category) &&
     typeof v.note === 'string' &&
     typeof v.timestamp === 'string' &&
-    (v.photos === undefined || Array.isArray(v.photos))
+    (v.photos === undefined || Array.isArray(v.photos)) &&
+    (v.county === undefined || typeof v.county === 'string') &&
+    (v.ward === undefined || typeof v.ward === 'string')
   );
 }
