@@ -1,7 +1,7 @@
 # Backend image: one static binary that serves the API and also runs
 # `aurarisk-backend migrate`. Build from aurarisk-backend/:
 #   docker build -t aurarisk-backend .
-FROM golang:1.27.2-alpine AS build
+FROM golang:1.27.3-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
