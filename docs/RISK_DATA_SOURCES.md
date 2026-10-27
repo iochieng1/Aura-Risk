@@ -86,13 +86,19 @@ Validation needs to know where and when it actually flooded.
 | Global Flood Database (satellite-mapped flood extents) | Worldwide, historical events |
 | Copernicus Emergency Management Service rapid mapping | Major disasters worldwide |
 | Dartmouth Flood Observatory, EM-DAT | Event lists with dates and areas |
+| **Kenya Red Cross** situation reports and **ReliefWeb** (OCHA) flash updates | Kenya; dated, named places for each flood event, e.g. the March–May 2024 long rains |
+| **Kenya Meteorological Department** (KMD) forecasts and advisories | Kenya; the official warnings to compare the score with |
+| **NDMA** early warning bulletins | Kenya, monthly per county; drought-focused, with flood notes |
+| **Water Resources Authority** river gauges | Kenya; gauge records for rivers such as the Nzoia and Nyando, on request |
+| **County disaster management offices** | Kenya; local incident logs, e.g. Kisumu County for the Kano plains |
 | **UP NOAH** flood hazard maps (5-, 25- and 100-year return periods) | Philippines |
 | **HazardHunterPH / GeoRiskPH** (DOST-PHIVOLCS) | Philippines hazard layers |
 | PAGASA rainfall and river bulletins | Philippines; check what is available as data |
 | AuraRisk's own verified community reports | Grows over time; biased toward populated areas |
 
-The web map defaults to Manila. If another region launches first, find the
-matching national hazard maps and agency data.
+Kenya is the launch region, starting with Kisumu
+([#56](https://github.com/iochieng1/Aura-Risk/issues/56)), so its sources come
+first. The Philippine sources stay for a later region.
 
 ## Calibration plan
 
