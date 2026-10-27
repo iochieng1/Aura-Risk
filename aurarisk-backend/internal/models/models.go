@@ -18,10 +18,24 @@ type RiskAssessment struct {
 	// SourceTimestamps) was used instead.
 	Stale            bool              `json:"stale"`
 	SourceTimestamps *SourceTimestamps `json:"source_timestamps,omitempty"`
+	// Ground and river inputs, when available; see services.Hydrology.
+	Hydrology *Hydrology `json:"hydrology,omitempty"`
 	// How far the inputs can be trusted; see services.AssessConfidence.
 	Confidence *Confidence `json:"confidence,omitempty"`
 	// Scoring logic that produced Score; see services.ModelVersion.
 	ModelVersion string `json:"model_version,omitempty"`
+}
+
+// Hydrology is the ground and river data behind a score. A field is absent
+// when its input was unavailable.
+type Hydrology struct {
+	// Ground elevation, and how far below its ~1 km surroundings it lies.
+	ElevationM  *float64 `json:"elevation_m,omitempty"`
+	DepressionM *float64 `json:"depression_m,omitempty"`
+	// Nearby main river: median discharge over the past 92 days, and the
+	// highest daily forecast over the next 3 days.
+	RiverBaselineM3s *float64 `json:"river_baseline_m3s,omitempty"`
+	RiverPeakM3s     *float64 `json:"river_peak_m3s,omitempty"`
 }
 
 type Confidence struct {

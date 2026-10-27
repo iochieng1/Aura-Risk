@@ -16,10 +16,21 @@ the decision-support notice.
 | Rain in the last 48 h and 7 days | Open-Meteo `past_days` | Real data |
 | Topsoil moisture (0–7 cm) | Open-Meteo `soil_moisture_0_to_7cm` | Real data |
 | Thunderstorm / heavy-shower weather code | Open-Meteo `current.weather_code` | Real data |
-| **Terrain factor (up to 20 points)** | `abs(sin(lat*100) * cos(lon*100)) * 20` | **Placeholder. Not related to the ground at all** |
+| Low-lying ground (up to 10 points) | Open-Meteo Elevation API: the point against 8 points ~1 km around it | Real data (since `heuristic-2`, [#57](https://github.com/iochieng1/Aura-Risk/issues/57)) |
+| River discharge (up to 20 points) | Open-Meteo Flood API (GloFAS): forecast peak against the 92-day median of the main river nearby | Real data (since `heuristic-2`) |
 
-The terrain factor looks random from place to place, and it can add up to a
-fifth of the score. Replacing it is the single most valuable change.
+`heuristic-1` had a placeholder terrain factor, `abs(sin(lat*100) *
+cos(lon*100)) * 20`, unrelated to the ground; `heuristic-2` replaced it with
+the two terms above.
+
+Known limits of the new terms, for the backtest to check:
+- Comparing with the past 92 days is not a return period: in a long wet
+  season the baseline rises, and a sustained flood scores less. Baselines
+  are raised to at least 10 m³/s so the first rains on a dry river aren't a
+  flood signal.
+- A flat floodplain (such as the Kano plains) isn't a depression at ~1 km,
+  so low-lying ground there scores little; height above the nearest river
+  (part 2) would capture it.
 
 All weights and thresholds (e.g. `antecedent48h/50*20`) are hand-picked and
 have never been compared with observed floods.

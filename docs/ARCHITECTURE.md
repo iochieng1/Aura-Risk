@@ -36,7 +36,10 @@ The current score is heuristic, not a calibrated flood model. It includes:
 - Rainfall in the preceding seven days, capped at 15 points.
 - The latest 0-7 cm soil moisture reading, capped at 20 points.
 - Current weather-code severity.
-- A temporary coordinate-based terrain factor.
+- Low-lying ground: how far the point sits below the ground ~1 km around it (Open-Meteo Elevation API, Copernicus DEM), capped at 10 points.
+- River discharge: the nearby main river's highest GloFAS forecast for the next 3 days against its median over the past 92 days (Open-Meteo Flood API), capped at 20 points. The 3×3 GloFAS cells around the point are searched, because the nearest ~5 km cell is often a small side stream.
+
+Elevation is cached per ~500 m cell for good; discharge per ~5 km cell for 6 hours, and up to 48 hours while the Flood API fails. Either input may be missing: the score leaves that term out, confidence drops to `low` and says why, and the request still succeeds. The device-weather fallback uses the server's own ground and river data.
 
 ### Time alignment
 
@@ -50,7 +53,7 @@ If `historicalDays` drops below seven, the 7-day window is cut short and confide
 
 Every assessment includes:
 
-- `model_version`: the scoring logic that produced it (currently `heuristic-1`). Bump it whenever inputs, weights, or thresholds change.
+- `model_version`: the scoring logic that produced it (currently `heuristic-2`). Bump it whenever inputs, weights, or thresholds change.
 - `confidence`: `{level, reasons}`, rating the inputs and the model, not the chance that the score is right (`internal/services/confidence.go`). It is `low` when weather is stale, current conditions are over two hours old or have no timestamp, the current hour cannot be found in the hourly series, history or forecast hours are missing, or there is no soil moisture reading. Otherwise it is `medium`. It stays capped at `medium` until the model is calibrated (#22). `reasons` explains each downgrade in plain language.
 - `stale` and `source_timestamps` (`weather_fetched_at`, `weather_observed_at`): see [Current API](#current-api).
 
@@ -117,7 +120,8 @@ Build for production with `npm run build`.
     "stale": false,
     "source_timestamps": { "weather_fetched_at": "2026-10-07T12:01:05Z", "weather_observed_at": "2026-10-07T12:00:00Z" },
     "confidence": { "level": "medium", "reasons": ["The score is a heuristic that has not yet been validated against observed floods."] },
-    "model_version": "heuristic-1"
+    "hydrology": { "elevation_m": 1151, "depression_m": 0.9, "river_baseline_m3s": 47.4, "river_peak_m3s": 60.9 },
+    "model_version": "heuristic-2"
   }
   ```
 - `GET /api/reports?lat=<lat>&lon=<lon>&radius=<km>`: up to 50 nearby reports.
@@ -167,7 +171,7 @@ Databases created by the old startup migration have a `schema_version` table. It
 4. ~~**Add database migrations.**~~ Done: see [Database migrations](#database-migrations). Originally: run versioned migrations as a deployment step instead of embedding schema creation in application startup. Add constraints and indexes appropriate for geographic queries.
 5. ~~**Harden the API.**~~ Done: see [Errors, request IDs, and limits](#errors-request-ids-and-limits); CORS allowlist from launch blocker 1; graceful shutdown drains readiness, finishes requests, and waits for background workers. Originally: add structured error responses, request IDs, CORS allowlists, rate limiting, timeouts, graceful shutdown, and health checks that distinguish process health from database and provider health.
 6. ~~**Make weather access resilient.**~~ Done: grid-cell caching with request coalescing, per-attempt timeouts and jittered retries, a circuit breaker, an outgoing call budget, and a stale-data policy (cached data up to `WEATHER_STALE_MAX` old is served with `stale: true`; otherwise `/api/risk` returns 503 with `Retry-After`). The notifier never alerts from stale data. Paid Open-Meteo plans are supported via `OPEN_METEO_API_KEY`. Originally: add caching by coordinate grid and time window, provider timeouts and retries with backoff, circuit breaking, and a stale-data policy. Open-Meteo and Nominatim usage must follow their service policies and rate limits.
-7. **Calibrate the risk model.** The terrain factor is a placeholder and the score has no regional validation. Do not present it as an official warning until it is evaluated against observed events and reviewed by domain experts. Data sources and the calibration plan are in [RISK_DATA_SOURCES.md](RISK_DATA_SOURCES.md).
+7. **Calibrate the risk model.** The weights are hand-picked and the score has no regional validation. Do not present it as an official warning until it is evaluated against observed events and reviewed by domain experts. Data sources and the calibration plan are in [RISK_DATA_SOURCES.md](RISK_DATA_SOURCES.md).
 8. **Add tests and CI.** Cover score edge cases, malformed API inputs, database failures, Open-Meteo decoding, handler responses, and frontend builds. Run formatting, static analysis, tests, and dependency checks on every pull request.
 9. **Deploy the frontend and backend separately.** Configure HTTPS, a real reverse proxy or API gateway, immutable builds, environment-specific settings, backups, restore drills, and rollback procedures. Hosting options and the recommended setup are in [DEPLOYMENT.md](DEPLOYMENT.md).
 

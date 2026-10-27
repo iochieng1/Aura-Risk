@@ -154,7 +154,7 @@ The full plan is in [RISK_DATA_SOURCES.md](RISK_DATA_SOURCES.md). In short:
   says "decision support only". Both are correct until this is done.
 
 **Phases:**
-1. **Real inputs (M):**
+1. **Real inputs (M):** done in [#57](https://github.com/iochieng1/Aura-Risk/issues/57) (`heuristic-2`).
    - Replace the placeholder with Open-Meteo elevation (and later height
      above the nearest drainage line).
    - Add GloFAS river discharge from the Open-Meteo Flood API.
@@ -279,7 +279,7 @@ From [ARCHITECTURE.md](ARCHITECTURE.md#recommended-release-gates):
 |---|---|---|
 | **0: quick wins** | ~~Merge PR #45~~ · ~~Go 1.27.2 upgrade~~ · ~~Open-Meteo attribution~~ · check `client_ip` · branch protection | Security and licence fixes; the first three are done |
 | **1: decide** | ~~Choose the launch region~~: Kenya, Kisumu pilot (#56) | Shapes #22's data and #27's hosting |
-| **2: foundations** | #26 database-failure tests and web tests · #22 part 1 (real elevation + river discharge) | Removes the placeholder quickly; small and visible |
+| **2: foundations** | #26 database-failure tests and web tests · ~~#22 part 1 (real elevation + river discharge)~~ done in #57 | Removes the placeholder quickly; small and visible |
 | **3: spatial** | #18 PostGIS | Unlocks #22's static layers and fixes radius search |
 | **4: calibrate** | #22 parts 2–3: layers, backtest, model report | The release gate that makes the score trustworthy |
 | **5: launch infrastructure** | #27 production hosting, runbooks, restore drill, licence decision | Needs the region, and funding or credits |

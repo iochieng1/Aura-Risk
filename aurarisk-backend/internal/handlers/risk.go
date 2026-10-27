@@ -76,5 +76,5 @@ func PostRiskWithWeather(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, services.AssessClientWeather(*req.Lat, *req.Lon, "Selected Location", req.Weather, now))
+	c.JSON(http.StatusOK, services.AssessClientWeather(c.Request.Context(), *req.Lat, *req.Lon, "Selected Location", req.Weather, now))
 }
