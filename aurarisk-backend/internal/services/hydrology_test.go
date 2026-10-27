@@ -38,8 +38,8 @@ func TestNeighbourhoodListsPointThenEightAround(t *testing.T) {
 
 // floodSeries is one cell's past then forecast values, all equal to past
 // except the forecast, which is ahead.
-func floodSeries(lat, lon, past, ahead float64) floodCell {
-	c := floodCell{Latitude: lat, Longitude: lon}
+func floodSeries(lat, lon, past, ahead float64) RiverSeries {
+	c := RiverSeries{Latitude: lat, Longitude: lon}
 	for i := 0; i < riverPastDays+riverForecastDays; i++ {
 		v := past
 		if i >= riverPastDays {
@@ -52,13 +52,13 @@ func floodSeries(lat, lon, past, ahead float64) floodCell {
 
 func TestMainRiverPicksTheCellCarryingMostWater(t *testing.T) {
 	// As near the Nyando: the nearest cell is a dry side stream.
-	got, err := mainRiver([]floodCell{
+	got := RiverFlowOn([]RiverSeries{
 		floodSeries(-0.175, 34.925, 0.05, 0.2),
 		floodSeries(-0.125, 34.925, 46, 120),
 		floodSeries(-0.225, 34.975, 0, 0),
-	})
-	if err != nil || got.Lat != -0.125 || got.Baseline != 46 || got.Peak != 120 {
-		t.Fatalf("river = %+v, err %v", got, err)
+	}, riverPastDays)
+	if got == nil || got.Lat != -0.125 || got.Baseline != 46 || got.Peak != 120 {
+		t.Fatalf("river = %+v", got)
 	}
 }
 
@@ -66,26 +66,41 @@ func TestMainRiverPeakOnlyCountsTheNextDays(t *testing.T) {
 	c := floodSeries(0, 0, 50, 60)
 	late := 500.0
 	c.Daily.RiverDischarge[riverPastDays+riverPeakDays] = &late // beyond the peak window
-	got, err := mainRiver([]floodCell{c})
-	if err != nil || got.Peak != 60 {
-		t.Fatalf("peak = %+v, err %v, want 60", got, err)
+	if got := RiverFlowOn([]RiverSeries{c}, riverPastDays); got == nil || got.Peak != 60 {
+		t.Fatalf("river = %+v, want peak 60", got)
 	}
 }
 
 func TestMainRiverSkipsNullsAndShortSeries(t *testing.T) {
-	short := floodCell{}
+	short := RiverSeries{}
 	v := 5.0
 	short.Daily.RiverDischarge = []*float64{&v}
-	allNull := floodCell{}
+	allNull := RiverSeries{}
 	allNull.Daily.RiverDischarge = make([]*float64, riverPastDays+riverForecastDays)
-	if _, err := mainRiver([]floodCell{short, allNull}); !errors.Is(err, errNoRiverData) {
-		t.Fatalf("err = %v, want errNoRiverData", err)
+	if got := RiverFlowOn([]RiverSeries{short, allNull}, riverPastDays); got != nil {
+		t.Fatalf("river = %+v, want nil", got)
 	}
 
 	gappy := floodSeries(0, 0, 30, 40)
 	gappy.Daily.RiverDischarge[0] = nil
-	if got, err := mainRiver([]floodCell{gappy}); err != nil || got.Baseline != 30 {
-		t.Fatalf("river = %+v, err %v", got, err)
+	if got := RiverFlowOn([]RiverSeries{gappy}, riverPastDays); got == nil || got.Baseline != 30 {
+		t.Fatalf("river = %+v", got)
+	}
+}
+
+func TestRiverFlowOnAnEarlierDay(t *testing.T) {
+	// Historical series run past the evaluated day; the peak is the next 3 days.
+	c := floodSeries(0, 0, 40, 40)
+	for i := 0; i < 10; i++ {
+		c.Daily.RiverDischarge = append(c.Daily.RiverDischarge, nil)
+	}
+	peak := 200.0
+	c.Daily.RiverDischarge[riverPastDays+2] = &peak
+	if got := RiverFlowOn([]RiverSeries{c}, riverPastDays); got == nil || got.Peak != 200 {
+		t.Fatalf("river = %+v, want the peak within 3 days", got)
+	}
+	if got := RiverFlowOn([]RiverSeries{c}, riverPastDays-1); got != nil {
+		t.Fatalf("river = %+v, want nil without %d days of history", got, riverPastDays)
 	}
 }
 
@@ -267,7 +282,7 @@ func TestFetchRiverRequestAndDecode(t *testing.T) {
 	var got *http.Request
 	srv, _ := openMeteoServer(t, func(w http.ResponseWriter, r *http.Request, n int) {
 		got = r
-		cells := []floodCell{floodSeries(-0.175, 34.925, 0.05, 0.1), floodSeries(-0.125, 34.925, 46, 71)}
+		cells := []RiverSeries{floodSeries(-0.175, 34.925, 0.05, 0.1), floodSeries(-0.125, 34.925, 46, 71)}
 		// A null, as GloFAS sends for missing days.
 		body, _ := json.Marshal(cells)
 		w.Write([]byte(strings.Replace(string(body), "0.05", "null", 1)))

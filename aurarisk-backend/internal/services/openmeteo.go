@@ -35,6 +35,9 @@ const (
 	OpenMeteoElevationCustomerURL = "https://customer-api.open-meteo.com/v1/elevation"
 	OpenMeteoFloodFreeURL         = "https://flood-api.open-meteo.com/v1/flood"
 	OpenMeteoFloodCustomerURL     = "https://customer-flood-api.open-meteo.com/v1/flood"
+	// Historical weather (ERA5 reanalysis), for offline evaluation.
+	OpenMeteoArchiveFreeURL     = "https://archive-api.open-meteo.com/v1/archive"
+	OpenMeteoArchiveCustomerURL = "https://customer-archive-api.open-meteo.com/v1/archive"
 )
 
 type OpenMeteoResponse struct {
@@ -55,6 +58,8 @@ type OpenMeteoResponse struct {
 		Precipitation []float64 `json:"precipitation"`
 		Rain          []float64 `json:"rain"`
 		SoilMoisture  []float64 `json:"soil_moisture_0_to_7cm"`
+		// Only requested from the Historical Weather API (FetchArchive).
+		WeatherCode []int `json:"weather_code,omitempty"`
 	} `json:"hourly"`
 }
 
@@ -67,9 +72,10 @@ var ErrRateLimited = errors.New("weather API rate limit reached")
 type OpenMeteoClient struct {
 	URL    string // defaults to OpenMeteoFreeURL, or the customer URL when APIKey is set
 	APIKey string // paid plans only
-	// Elevation and Flood API endpoints, defaulting like URL.
+	// Elevation, Flood and Historical Weather API endpoints, defaulting like URL.
 	ElevationURL string
 	FloodURL     string
+	ArchiveURL   string
 	HTTP         *http.Client
 	Attempts     int           // total attempts, default 3
 	Timeout      time.Duration // per attempt, default 5s
@@ -109,6 +115,25 @@ func (c *OpenMeteoClient) Fetch(ctx context.Context, lat, lon float64) (*OpenMet
 	}
 	if observedAt, ok := data.ObservedAt(); ok {
 		metrics.ObserveWeatherAge(time.Since(observedAt))
+	}
+	return &data, nil
+}
+
+// FetchArchive returns hourly ERA5 reanalysis weather from start to end
+// (YYYY-MM-DD, local days), for offline evaluation. Current conditions are
+// left empty; the caller sets them for the hour it evaluates.
+func (c *OpenMeteoClient) FetchArchive(ctx context.Context, lat, lon float64, start, end string) (*OpenMeteoResponse, error) {
+	q := url.Values{}
+	q.Set("latitude", fmt.Sprintf("%.6f", lat))
+	q.Set("longitude", fmt.Sprintf("%.6f", lon))
+	q.Set("start_date", start)
+	q.Set("end_date", end)
+	q.Set("hourly", "precipitation,rain,soil_moisture_0_to_7cm,weather_code")
+	q.Set("timezone", "auto")
+
+	var data OpenMeteoResponse
+	if err := c.get(ctx, "archive", c.pick(c.ArchiveURL, OpenMeteoArchiveFreeURL, OpenMeteoArchiveCustomerURL), q, &data); err != nil {
+		return nil, err
 	}
 	return &data, nil
 }

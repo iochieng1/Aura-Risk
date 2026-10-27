@@ -88,44 +88,69 @@ func terrainFrom(elevations []float64) *Terrain {
 // FetchRiver returns discharge for the main river near the point, in one
 // Flood API call covering the point's GloFAS cell and its neighbours.
 func (c *OpenMeteoClient) FetchRiver(ctx context.Context, lat, lon float64) (*RiverFlow, error) {
-	lats, lons := neighbourhood(lat, lon, riverNeighbourDegrees)
 	q := url.Values{}
+	q.Set("past_days", fmt.Sprint(riverPastDays))
+	q.Set("forecast_days", fmt.Sprint(riverForecastDays))
+	cells, err := c.fetchRiverCells(ctx, lat, lon, q)
+	if err != nil {
+		return nil, err
+	}
+	if flow := RiverFlowOn(cells, riverPastDays); flow != nil {
+		return flow, nil
+	}
+	return nil, errNoRiverData
+}
+
+// FetchRiverHistory returns daily discharge from start to end (YYYY-MM-DD)
+// for the point's GloFAS cell and its neighbours, for offline evaluation.
+func (c *OpenMeteoClient) FetchRiverHistory(ctx context.Context, lat, lon float64, start, end string) ([]RiverSeries, error) {
+	q := url.Values{}
+	q.Set("start_date", start)
+	q.Set("end_date", end)
+	return c.fetchRiverCells(ctx, lat, lon, q)
+}
+
+func (c *OpenMeteoClient) fetchRiverCells(ctx context.Context, lat, lon float64, q url.Values) ([]RiverSeries, error) {
+	lats, lons := neighbourhood(lat, lon, riverNeighbourDegrees)
 	q.Set("latitude", strings.Join(lats, ","))
 	q.Set("longitude", strings.Join(lons, ","))
 	q.Set("daily", "river_discharge")
-	q.Set("past_days", fmt.Sprint(riverPastDays))
-	q.Set("forecast_days", fmt.Sprint(riverForecastDays))
 
 	// Several locations come back as an array, one object per location.
-	var cells []floodCell
+	var cells []RiverSeries
 	if err := c.get(ctx, "flood", c.pick(c.FloodURL, OpenMeteoFloodFreeURL, OpenMeteoFloodCustomerURL), q, &cells); err != nil {
 		return nil, err
 	}
-	return mainRiver(cells)
+	return cells, nil
 }
 
-type floodCell struct {
+// RiverSeries is daily GloFAS discharge for one cell, as the Flood API
+// returns it.
+type RiverSeries struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 	Daily     struct {
-		// Null where GloFAS has no value; decoded as nil.
+		Time []string `json:"time"`
+		// m³/s; nil where GloFAS has no value.
 		RiverDischarge []*float64 `json:"river_discharge"`
 	} `json:"daily"`
 }
 
 var errNoRiverData = errors.New("flood API returned no usable discharge series")
 
-// mainRiver picks the cell with the highest baseline discharge and summarises
-// it. Past days come first in each series, then today and the forecast.
-func mainRiver(cells []floodCell) (*RiverFlow, error) {
+// RiverFlowOn summarises the cells as seen on day (an index into each
+// series), which needs riverPastDays before it and riverPeakDays from it:
+// the cell with the highest baseline is taken as the main river. It returns
+// nil when no cell has usable data.
+func RiverFlowOn(cells []RiverSeries, day int) *RiverFlow {
 	var best *RiverFlow
 	for _, cell := range cells {
 		series := cell.Daily.RiverDischarge
-		if len(series) != riverPastDays+riverForecastDays {
+		if day < riverPastDays || day+riverPeakDays > len(series) {
 			continue
 		}
-		past := values(series[:riverPastDays])
-		ahead := values(series[riverPastDays : riverPastDays+riverPeakDays])
+		past := values(series[day-riverPastDays : day])
+		ahead := values(series[day : day+riverPeakDays])
 		if len(past) == 0 || len(ahead) == 0 {
 			continue
 		}
@@ -134,10 +159,7 @@ func mainRiver(cells []floodCell) (*RiverFlow, error) {
 			best = flow
 		}
 	}
-	if best == nil {
-		return nil, errNoRiverData
-	}
-	return best, nil
+	return best
 }
 
 func values(series []*float64) []float64 {
