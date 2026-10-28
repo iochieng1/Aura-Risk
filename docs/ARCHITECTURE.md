@@ -126,6 +126,7 @@ Build for production with `npm run build`.
   ```
 - `GET /api/reports?lat=<lat>&lon=<lon>&radius=<km>`: up to 50 reports within `radius` km (default 10, at most 200), measured as true distance with PostGIS. Add `county=<name>` to keep only one Kenyan county's reports, or pass `county` alone (no `lat`/`lon`) to list that county's latest reports.
 - `POST /api/reports`: creates a community report. Optional `county` (any of Kenya's 47 counties; case, a trailing "County" and spaces or hyphens are ignored, and the official name is stored) and `ward` (free text, up to 100 bytes, needs a county). Reports return both when set.
+- `/api/responder/reports`: county responders list, acknowledge and resolve their county's verified reports. Reports carry a public `response_status` (`open`, `acknowledged`, `resolved`), and verified reports can be sent to a per-county webhook. See [COUNTY_RESPONSE.md](COUNTY_RESPONSE.md).
 
 The report endpoint expects `location`, `category`, and `note`. Valid categories are `flooding`, `road_blocked`, `water_rising`, and `drainage_issue`.
 

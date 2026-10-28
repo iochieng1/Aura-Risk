@@ -86,6 +86,16 @@ func Validate() error {
 		problems = append(problems, err.Error())
 	}
 
+	responders, err := ResponderTokens()
+	if err != nil {
+		problems = append(problems, err.Error())
+	}
+
+	webhooks, err := CountyWebhooks()
+	if err != nil {
+		problems = append(problems, err.Error())
+	}
+
 	if err := logging.CheckFormat(LogFormat()); err != nil {
 		problems = append(problems, err.Error())
 	}
@@ -95,6 +105,14 @@ func Validate() error {
 			if len(token) < minModeratorTokenLength {
 				problems = append(problems, fmt.Sprintf("MODERATOR_TOKENS: token for %q must be at least %d characters", name, minModeratorTokenLength))
 			}
+		}
+		for name, r := range responders {
+			if len(r.Token) < minModeratorTokenLength {
+				problems = append(problems, fmt.Sprintf("RESPONDER_TOKENS: token for %q must be at least %d characters", name, minModeratorTokenLength))
+			}
+		}
+		if len(webhooks) > 0 && len(GetEnv("COUNTY_WEBHOOK_SECRET", "")) < minModeratorTokenLength {
+			problems = append(problems, fmt.Sprintf("COUNTY_WEBHOOK_SECRET must be at least %d characters while COUNTY_WEBHOOKS is set", minModeratorTokenLength))
 		}
 		if dsn != "" && isDevSecret(dsnPassword(dsn)) {
 			problems = append(problems, "DATABASE_URL uses a development password")
@@ -223,6 +241,70 @@ func ModeratorTokens() (map[string]string, error) {
 		tokens[name] = token
 	}
 	return tokens, nil
+}
+
+// Responder is a county responder from RESPONDER_TOKENS.
+type Responder struct {
+	// County as written in the setting; the handlers check it is one of
+	// Kenya's 47 and store the official name.
+	County string
+	Token  string
+}
+
+// ResponderTokens parses RESPONDER_TOKENS ("name:County:token,...") into a
+// map of responder name to county and token. Names are recorded in the
+// response audit trail. An empty value disables the responder API.
+func ResponderTokens() (map[string]Responder, error) {
+	raw := strings.TrimSpace(GetEnv("RESPONDER_TOKENS", ""))
+	responders := map[string]Responder{}
+	if raw == "" {
+		return responders, nil
+	}
+	seen := map[string]bool{}
+	for _, entry := range strings.Split(raw, ",") {
+		parts := strings.SplitN(strings.TrimSpace(entry), ":", 3)
+		if len(parts) != 3 {
+			return nil, errors.New(`RESPONDER_TOKENS must be a comma-separated list of "name:County:token"`)
+		}
+		name, county, token := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), strings.TrimSpace(parts[2])
+		if name == "" || county == "" || token == "" {
+			return nil, errors.New(`RESPONDER_TOKENS must be a comma-separated list of "name:County:token"`)
+		}
+		if _, dup := responders[name]; dup {
+			return nil, fmt.Errorf("RESPONDER_TOKENS: responder %q is listed twice", name)
+		}
+		if seen[token] {
+			return nil, errors.New("RESPONDER_TOKENS: two responders share a token")
+		}
+		seen[token] = true
+		responders[name] = Responder{County: county, Token: token}
+	}
+	return responders, nil
+}
+
+// CountyWebhooks parses COUNTY_WEBHOOKS ("County=https://...,...") into a map
+// of county, as written, to the URL notified when a report there is verified.
+func CountyWebhooks() (map[string]string, error) {
+	hooks := map[string]string{}
+	for _, entry := range GetList("COUNTY_WEBHOOKS", nil) {
+		county, rawURL, ok := strings.Cut(entry, "=")
+		county, rawURL = strings.TrimSpace(county), strings.TrimSpace(rawURL)
+		if !ok || county == "" || rawURL == "" {
+			return nil, errors.New(`COUNTY_WEBHOOKS must be a comma-separated list of "County=URL"`)
+		}
+		u, err := url.Parse(rawURL)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return nil, fmt.Errorf("COUNTY_WEBHOOKS: %q is not an http(s) URL", rawURL)
+		}
+		if IsProduction() && u.Scheme != "https" {
+			return nil, fmt.Errorf("COUNTY_WEBHOOKS: %q must use https in production", rawURL)
+		}
+		if _, dup := hooks[county]; dup {
+			return nil, fmt.Errorf("COUNTY_WEBHOOKS: county %q is listed twice", county)
+		}
+		hooks[county] = rawURL
+	}
+	return hooks, nil
 }
 
 // GetList reads a comma-separated list, ignoring blanks. Unset uses fallback;

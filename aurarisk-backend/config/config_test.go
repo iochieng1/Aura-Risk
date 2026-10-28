@@ -27,7 +27,7 @@ func (f *fakeFetcher) GetSecret(_ context.Context, id string) (string, error) {
 // when the test ends.
 func clearEnv(t *testing.T) {
 	t.Helper()
-	keys := []string{"APP_ENV", "NOTIFIER_INTERVAL", "LOG_FORMAT"}
+	keys := []string{"APP_ENV", "NOTIFIER_INTERVAL", "LOG_FORMAT", "COUNTY_WEBHOOKS"}
 	for _, key := range SecretKeys {
 		keys = append(keys, key, key+"_FILE")
 	}
@@ -224,6 +224,55 @@ func TestValidateProductionRequiresLongModeratorTokens(t *testing.T) {
 	}
 
 	t.Setenv("MODERATOR_TOKENS", "alice:"+strings.Repeat("x", 32))
+	if err := Validate(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestResponderTokens(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("RESPONDER_TOKENS", " wanjiru:Kisumu:tok-a , otieno:Homa Bay:tok-b")
+	got, err := ResponderTokens()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got["wanjiru"] != (Responder{"Kisumu", "tok-a"}) || got["otieno"].County != "Homa Bay" {
+		t.Fatalf("ResponderTokens = %v", got)
+	}
+	for _, bad := range []string{"wanjiru:tok", "wanjiru::tok", ":Kisumu:tok", "a:Kisumu:x,a:Siaya:y", "a:Kisumu:same,b:Siaya:same"} {
+		t.Setenv("RESPONDER_TOKENS", bad)
+		if _, err := ResponderTokens(); err == nil {
+			t.Errorf("RESPONDER_TOKENS=%q: expected error", bad)
+		}
+	}
+}
+
+func TestCountyWebhooks(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("COUNTY_WEBHOOKS", "Kisumu=https://hooks.example.org/kisumu, Siaya = http://localhost:9000/x")
+	got, err := CountyWebhooks()
+	if err != nil || len(got) != 2 || got["Siaya"] != "http://localhost:9000/x" {
+		t.Fatalf("CountyWebhooks = %v, %v", got, err)
+	}
+	for _, bad := range []string{"Kisumu", "Kisumu=", "=https://x.org", "Kisumu=ftp://x.org", "Kisumu=https://a.org,Kisumu=https://b.org"} {
+		t.Setenv("COUNTY_WEBHOOKS", bad)
+		if _, err := CountyWebhooks(); err == nil {
+			t.Errorf("COUNTY_WEBHOOKS=%q: expected error", bad)
+		}
+	}
+
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("NOTIFIER_INTERVAL", "0")
+	t.Setenv("DATABASE_URL", "postgres://app:s3cr3t-Value@db:5432/aurarisk?sslmode=require")
+	t.Setenv("COUNTY_WEBHOOKS", "Kisumu=http://hooks.example.org/kisumu")
+	if _, err := CountyWebhooks(); err == nil {
+		t.Error("production allowed an http webhook")
+	}
+	t.Setenv("COUNTY_WEBHOOKS", "Kisumu=https://hooks.example.org/kisumu")
+	if err := Validate(); err == nil || !strings.Contains(err.Error(), "COUNTY_WEBHOOK_SECRET") {
+		t.Fatalf("Validate() without a secret = %v", err)
+	}
+	t.Setenv("COUNTY_WEBHOOK_SECRET", strings.Repeat("s", 32))
 	if err := Validate(); err != nil {
 		t.Fatal(err)
 	}

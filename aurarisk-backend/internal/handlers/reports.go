@@ -116,7 +116,8 @@ func getReports(c *gin.Context, county string, area *circle) {
 		filters += fmt.Sprintf(" AND county = $%d", len(args))
 	}
 	query := `
-		SELECT id, location_name, lat, lon, category, note, created_at, moderation_status, corroboration_count, county, ward
+		SELECT id, location_name, lat, lon, category, note, created_at, moderation_status, corroboration_count, county, ward,
+			response_status, response_updated_at
 		FROM community_reports
 		WHERE moderation_status = ANY($1)
 		AND duplicate_of IS NULL` + filters + `
@@ -146,6 +147,8 @@ func getReports(c *gin.Context, county string, area *circle) {
 			&r.Corroborations,
 			&r.County,
 			&r.Ward,
+			&r.ResponseStatus,
+			&r.ResponseUpdatedAt,
 		); err != nil {
 			internalError(c, err)
 			return
@@ -279,13 +282,14 @@ func CreateReport(c *gin.Context) {
 			Lat:  req.Location.Lat,
 			Lon:  req.Location.Lon,
 		},
-		Category:  req.Category,
-		Note:      req.Note,
-		Timestamp: createdAt,
-		Photos:    []models.ReportPhoto{},
-		Status:    services.ReportPending,
-		County:    county,
-		Ward:      ward,
+		Category:       req.Category,
+		Note:           req.Note,
+		Timestamp:      createdAt,
+		Photos:         []models.ReportPhoto{},
+		Status:         services.ReportPending,
+		County:         county,
+		Ward:           ward,
+		ResponseStatus: services.ResponseOpen,
 	}
 	if duplicateOf != "" {
 		report.DuplicateOf = &duplicateOf

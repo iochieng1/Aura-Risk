@@ -109,6 +109,17 @@ func main() {
 		log.Println("⚠️ MODERATOR_TOKENS is not set: the moderation API is disabled")
 	}
 
+	responders, err := config.ResponderTokens()
+	if err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
+	if err := handlers.SetResponders(responders); err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
+	if len(responders) == 0 {
+		log.Println("⚠️ RESPONDER_TOKENS is not set: the county responder API is disabled")
+	}
+
 	// Background workers stop when ctx is cancelled; shutdown waits for them
 	// so none is cut off mid-write when the database closes.
 	var workerWG sync.WaitGroup
@@ -161,6 +172,24 @@ func main() {
 	if interval := config.GetDuration("REPORT_VERIFIER_INTERVAL", 2*time.Minute); interval > 0 {
 		startWorker((&workers.ReportVerifier{DB: db, Interval: interval}).Run)
 		log.Printf("✅ Report verifier running every %s", interval)
+	}
+
+	webhooks, err := config.CountyWebhooks()
+	if err != nil {
+		log.Fatalf("Startup aborted: %v", err)
+	}
+	if len(webhooks) > 0 {
+		urls := make(map[string]string, len(webhooks))
+		for county, url := range webhooks {
+			name, ok := services.NormalizeCounty(county)
+			if !ok {
+				log.Fatalf("Startup aborted: COUNTY_WEBHOOKS: %q is not a Kenyan county", county)
+			}
+			urls[name] = url
+		}
+		interval := config.GetDuration("COUNTY_WEBHOOK_INTERVAL", 30*time.Second)
+		startWorker((&workers.CountyWebhooks{DB: db, URLs: urls, Secret: config.GetEnv("COUNTY_WEBHOOK_SECRET", ""), Interval: interval}).Run)
+		log.Printf("✅ County webhooks for %d county(ies) running every %s", len(urls), interval)
 	}
 
 	if interval := config.GetDuration("RETENTION_INTERVAL", time.Hour); interval > 0 {
@@ -250,6 +279,13 @@ func main() {
 			moderation.GET("/reports", handlers.ListModerationQueue)
 			moderation.POST("/reports/:id", handlers.ModerateReport)
 			moderation.GET("/reports/:id/events", handlers.ListModerationEvents)
+		}
+
+		responder := api.Group("/responder", handlers.RequireResponder())
+		{
+			responder.GET("/reports", handlers.ListResponderReports)
+			responder.POST("/reports/:id", handlers.UpdateReportResponse)
+			responder.GET("/reports/:id/events", handlers.ListResponseEvents)
 		}
 	}
 

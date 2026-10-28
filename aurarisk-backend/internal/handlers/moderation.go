@@ -28,8 +28,7 @@ func SetModerators(tokens map[string]string) {
 	}
 }
 
-// RequireModerator authenticates a moderator by bearer token. Every
-// configured hash is compared in constant time so timing reveals nothing.
+// RequireModerator authenticates a moderator by bearer token.
 func RequireModerator() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if len(moderatorTokenHashes) == 0 {
@@ -41,13 +40,7 @@ func RequireModerator() gin.HandlerFunc {
 			unauthorized(c, "missing moderator token")
 			return
 		}
-		presented := sha256.Sum256([]byte(token))
-		var name string
-		for hash, candidate := range moderatorTokenHashes {
-			if subtle.ConstantTimeCompare(presented[:], hash[:]) == 1 {
-				name = candidate
-			}
-		}
+		name := matchToken(moderatorTokenHashes, token)
 		if name == "" {
 			unauthorized(c, "invalid moderator token")
 			return
@@ -57,10 +50,24 @@ func RequireModerator() gin.HandlerFunc {
 	}
 }
 
+// matchToken returns the name whose token hash matches, or "". Every hash is
+// compared in constant time so timing reveals nothing.
+func matchToken(hashes map[[sha256.Size]byte]string, token string) string {
+	presented := sha256.Sum256([]byte(token))
+	var name string
+	for hash, candidate := range hashes {
+		if subtle.ConstantTimeCompare(presented[:], hash[:]) == 1 {
+			name = candidate
+		}
+	}
+	return name
+}
+
 const moderationReportColumns = `
 	r.id, r.location_name, r.lat, r.lon, r.category, r.note, r.created_at,
 	r.moderation_status, r.corroboration_count, r.duplicate_of, r.verification_score,
 	r.account_id, r.moderated_by, r.moderation_reason, r.status_updated_at, r.county, r.ward,
+	r.response_status, r.response_updated_at,
 	(SELECT COUNT(*) FROM community_reports h
 		WHERE r.account_id IS NOT NULL AND h.account_id = r.account_id AND h.id <> r.id
 		AND h.moderation_status = 'verified' AND h.moderated_by <> 'auto'),
@@ -74,6 +81,7 @@ func scanModerationReport(row interface{ Scan(...any) error }) (models.Moderatio
 		&r.ID, &r.Location.Name, &r.Location.Lat, &r.Location.Lon, &r.Category, &r.Note, &r.Timestamp,
 		&r.Status, &r.Corroborations, &r.DuplicateOf, &r.VerificationScore,
 		&r.AccountID, &r.ModeratedBy, &r.ModerationReason, &r.StatusUpdatedAt, &r.County, &r.Ward,
+		&r.ResponseStatus, &r.ResponseUpdatedAt,
 		&r.ReporterVerified, &r.ReporterRejected,
 	)
 	r.Photos = []models.ReportPhoto{}
