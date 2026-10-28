@@ -27,7 +27,7 @@ func (f *fakeFetcher) GetSecret(_ context.Context, id string) (string, error) {
 // when the test ends.
 func clearEnv(t *testing.T) {
 	t.Helper()
-	keys := []string{"APP_ENV", "NOTIFIER_INTERVAL", "LOG_FORMAT", "COUNTY_WEBHOOKS"}
+	keys := []string{"APP_ENV", "NOTIFIER_INTERVAL", "LOG_FORMAT", "COUNTY_WEBHOOKS", "AT_USERNAME"}
 	for _, key := range SecretKeys {
 		keys = append(keys, key, key+"_FILE")
 	}

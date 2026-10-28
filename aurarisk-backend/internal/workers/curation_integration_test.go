@@ -257,3 +257,23 @@ func TestRetentionCleanerRunOnce(t *testing.T) {
 		t.Fatal("zero policy deleted data")
 	}
 }
+
+// SMS and USSD reports sit at the county headquarters, so they must not
+// corroborate each other just for being in the same county.
+func TestApproximateReportsDoNotCorroborate(t *testing.T) {
+	db := curationDB(t)
+	lat, lon := testSite()
+	a := insertReport(t, db, testReport{lat: lat, lon: lon, note: "First", account: newAccount(t, db)})
+	b := insertReport(t, db, testReport{lat: lat, lon: lon, note: "Second", account: newAccount(t, db)})
+	v := &ReportVerifier{DB: db}
+
+	_, before, err := v.gatherEvidence(context.Background(), pendingReport{ID: a, Category: "flooding"})
+	if err != nil || before != 1 {
+		t.Fatalf("precise reports: %d corroborations, %v", before, err)
+	}
+	db.Exec(`UPDATE community_reports SET location_approximate = TRUE, source = 'sms' WHERE id = $1`, b)
+	_, after, err := v.gatherEvidence(context.Background(), pendingReport{ID: a, Category: "flooding"})
+	if err != nil || after != 0 {
+		t.Fatalf("with an approximate report: %d corroborations, %v", after, err)
+	}
+}

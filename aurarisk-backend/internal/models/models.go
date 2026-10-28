@@ -73,6 +73,9 @@ type CommunityReport struct {
 	// changed (absent while open).
 	ResponseStatus    string     `json:"response_status"`
 	ResponseUpdatedAt *time.Time `json:"response_updated_at,omitempty"`
+	// True for SMS and USSD reports, which are placed at the county
+	// headquarters rather than where the problem is.
+	LocationApproximate bool `json:"location_approximate,omitempty"`
 }
 
 // ModerationReport is a report as moderators see it.

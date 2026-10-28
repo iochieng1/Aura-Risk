@@ -134,7 +134,8 @@ func (v *ReportVerifier) loadPending(ctx context.Context) ([]pendingReport, erro
 
 // gatherEvidence collects corroborating reports, photos, and the reporter's
 // moderation history. It returns the evidence and the number of
-// corroborating reports within the radius.
+// corroborating reports within the radius. SMS and USSD reports sit at the
+// county headquarters, so they neither corroborate nor are corroborated.
 func (v *ReportVerifier) gatherEvidence(ctx context.Context, r pendingReport) (services.Evidence, int, error) {
 	e := services.Evidence{SignedIn: r.AccountID.Valid}
 
@@ -145,6 +146,7 @@ func (v *ReportVerifier) gatherEvidence(ctx context.Context, r pendingReport) (s
 		AND o.duplicate_of IS NULL AND o.moderation_status <> 'rejected'
 		AND o.category = ANY($2)
 		AND ST_DWithin(o.geog, r.geog, $3)
+		AND NOT o.location_approximate AND NOT r.location_approximate
 		AND o.created_at BETWEEN r.created_at - make_interval(secs => $4) AND r.created_at + make_interval(secs => $4)
 		AND (r.account_id IS NULL OR o.account_id IS DISTINCT FROM r.account_id)
 	`, r.ID, pq.Array(services.CategoriesForGroup(r.Category)), float64(services.CorroborationRadiusMeters),
