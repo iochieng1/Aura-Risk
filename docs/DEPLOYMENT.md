@@ -150,8 +150,10 @@ changes.
 1. **Images**: the backend Dockerfile exists (`aurarisk-backend/Dockerfile`;
    the same binary runs `migrate`). The web app is a static build and needs
    none.
-2. **Image builds in CI**: images tagged by commit SHA, so a release is
-   immutable and rollback means deploying the previous tag.
+2. **Image builds in CI**: done. Every `main` build is published as
+   `ghcr.io/iochieng1/aurarisk-backend:sha-<commit>`, so a release is
+   immutable and rollback means deploying the previous tag (see
+   [RELEASE.md](RELEASE.md)).
 3. **Production settings**:
    - `APP_ENV=production` (logs default to JSON) and `TRUSTED_PROXIES` set to
      the load balancer.
@@ -159,13 +161,17 @@ changes.
    - `SHUTDOWN_DRAIN_DELAY` set above the load balancer's health-check
      interval.
    - Health checks on `/health/ready`.
-4. **Infrastructure as code** (Terraform or similar), so environments can be
-   rebuilt.
+4. **Infrastructure as code**: `render.yaml` describes the demo, and
+   `deploy/docker-compose.prod.yml` with `deploy/Caddyfile` describes a
+   single-server staging or production setup with HTTPS. AWS would still need
+   Terraform (or similar) for its VPC, ECS, RDS and ALB.
 5. **Release gates from #27**:
-   - **Runbooks:** document the incident and rollback procedures, building on
-     [ON_CALL.md](ON_CALL.md).
-   - **Restore drill:** restore a database backup into a scratch instance,
-     check it, and record the date and time taken. Repeat this regularly.
+   - **Runbooks:** done. Release, rollback and incident procedures are in
+     [RELEASE.md](RELEASE.md), building on [ON_CALL.md](ON_CALL.md).
+   - **Restore drill:** `deploy/scripts/restore-drill.sh` does it and prints a
+     record. It was rehearsed on synthetic data
+     ([record](drills/2026-10-28-restore-drill.md)) and must be run against a
+     production backup before launch, then quarterly.
 
 ## Recommendation
 

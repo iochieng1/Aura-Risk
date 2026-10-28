@@ -1,0 +1,41 @@
+# HTTPS reverse proxy for a single-server deployment (docker-compose.prod.yml).
+# Caddy gets and renews Let's Encrypt certificates for both hosts, redirects
+# HTTP to HTTPS, and is the only container with public ports.
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_HOST} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	# Request bodies are small JSON; photos go straight to object storage.
+	request_body {
+		max_size 1MB
+	}
+	reverse_proxy api:8080 {
+		health_uri /health/ready
+		health_interval 10s
+	}
+}
+
+{$WEB_HOST} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+	}
+	root * /srv/web
+	# Hashed assets never change; the page itself is always revalidated.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	try_files {path} /index.html
+	file_server
+}
