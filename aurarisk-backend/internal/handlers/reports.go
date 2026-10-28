@@ -118,7 +118,7 @@ func getReports(c *gin.Context, county string, area *circle) {
 	}
 	query := `
 		SELECT id, location_name, lat, lon, category, note, created_at, moderation_status, corroboration_count, county, ward,
-			response_status, response_updated_at
+			response_status, response_updated_at, location_approximate
 		FROM community_reports
 		WHERE moderation_status = ANY($1)
 		AND duplicate_of IS NULL` + filters + `
@@ -150,6 +150,7 @@ func getReports(c *gin.Context, county string, area *circle) {
 			&r.Ward,
 			&r.ResponseStatus,
 			&r.ResponseUpdatedAt,
+			&r.LocationApproximate,
 		); err != nil {
 			internalError(c, err)
 			return
@@ -221,82 +222,105 @@ func CreateReport(c *gin.Context) {
 	}
 
 	// Reports from signed-in devices are owned so photos can be attached.
-	var accountID sql.NullString
-	if id := c.GetString(ctxAccountID); id != "" {
-		accountID = sql.NullString{String: id, Valid: true}
-	}
-
-	tx, err := db.BeginTx(c.Request.Context(), nil)
-	if err != nil {
-		internalError(c, err)
-		return
-	}
-	defer tx.Rollback()
-
-	duplicateOf, err := findDuplicate(c.Request.Context(), tx, services.NewReport{
-		AccountID: accountID.String,
+	report, err := storeReport(c, newReport{
+		Location:  models.Location{Name: req.Location.Name, Lat: req.Location.Lat, Lon: req.Location.Lon},
 		Category:  req.Category,
 		Note:      req.Note,
-		Lat:       req.Location.Lat,
-		Lon:       req.Location.Lon,
-		CreatedAt: time.Now(),
+		AccountID: c.GetString(ctxAccountID),
+		County:    county,
+		Ward:      ward,
+		Source:    services.SourceApp,
 	})
 	if err != nil {
 		internalError(c, err)
 		return
 	}
+	c.JSON(http.StatusCreated, report)
+}
 
-	query := `
-		INSERT INTO community_reports (location_name, lat, lon, category, note, account_id, duplicate_of, county, ward)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id, created_at
-	`
+// newReport is a validated report from any channel.
+type newReport struct {
+	Location  models.Location
+	Category  string
+	Note      string
+	AccountID string
+	County    *string
+	Ward      *string
+	// services.SourceApp, SourceSMS or SourceUSSD. SMS and USSD reports sit
+	// at the county headquarters, so their location is approximate.
+	Source string
+}
+
+// storeReport saves a report after duplicate detection and logs it for the
+// audit trail.
+func storeReport(c *gin.Context, r newReport) (models.CommunityReport, error) {
+	accountID := sql.NullString{String: r.AccountID, Valid: r.AccountID != ""}
+	approximate := r.Source != services.SourceApp
+
+	ctx := c.Request.Context()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return models.CommunityReport{}, err
+	}
+	defer tx.Rollback()
+
+	duplicateOf, err := findDuplicate(ctx, tx, services.NewReport{
+		AccountID: r.AccountID,
+		Category:  r.Category,
+		Note:      r.Note,
+		Lat:       r.Location.Lat,
+		Lon:       r.Location.Lon,
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		return models.CommunityReport{}, err
+	}
 
 	var id string
 	var createdAt time.Time
-	err = tx.QueryRowContext(c.Request.Context(),
-		query,
-		req.Location.Name,
-		req.Location.Lat,
-		req.Location.Lon,
-		req.Category,
-		req.Note,
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO community_reports (location_name, lat, lon, category, note, account_id, duplicate_of, county, ward,
+			source, location_approximate)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		RETURNING id, created_at
+	`,
+		r.Location.Name,
+		r.Location.Lat,
+		r.Location.Lon,
+		r.Category,
+		r.Note,
 		accountID,
 		sql.NullString{String: duplicateOf, Valid: duplicateOf != ""},
-		county,
-		ward,
+		r.County,
+		r.Ward,
+		r.Source,
+		approximate,
 	).Scan(&id, &createdAt)
 	if err != nil {
-		internalError(c, err)
-		return
+		return models.CommunityReport{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		internalError(c, err)
-		return
+		return models.CommunityReport{}, err
 	}
-	auditReportCreated(c, id, accountID.String, req.Category, duplicateOf)
+	auditReportCreated(c, id, r.AccountID, r.Category, duplicateOf, r.Source)
 
 	report := models.CommunityReport{
-		ID: id,
-		Location: models.Location{
-			Name: req.Location.Name,
-			Lat:  req.Location.Lat,
-			Lon:  req.Location.Lon,
-		},
-		Category:       req.Category,
-		Note:           req.Note,
-		Timestamp:      createdAt,
-		Photos:         []models.ReportPhoto{},
-		Status:         services.ReportPending,
-		County:         county,
-		Ward:           ward,
-		ResponseStatus: services.ResponseOpen,
+		ID:                  id,
+		Location:            r.Location,
+		Category:            r.Category,
+		Note:                r.Note,
+		Timestamp:           createdAt,
+		Photos:              []models.ReportPhoto{},
+		Status:              services.ReportPending,
+		County:              r.County,
+		Ward:                r.Ward,
+		ResponseStatus:      services.ResponseOpen,
+		LocationApproximate: approximate,
 	}
 	if duplicateOf != "" {
 		report.DuplicateOf = &duplicateOf
 	}
-
-	c.JSON(http.StatusCreated, report)
+	return report, nil
 }
 
 // validateCountyWard returns the official county name and trimmed ward (nil
@@ -323,7 +347,7 @@ func validateCountyWard(rawCounty, rawWard string) (county, ward *string, msg st
 
 // auditReportCreated logs who submitted a report so abuse can be traced.
 // The note and location name are left out because they are free text.
-func auditReportCreated(c *gin.Context, reportID, accountID, category, duplicateOf string) {
+func auditReportCreated(c *gin.Context, reportID, accountID, category, duplicateOf, source string) {
 	if accountID == "" {
 		accountID = "anonymous"
 	}
@@ -331,7 +355,7 @@ func auditReportCreated(c *gin.Context, reportID, accountID, category, duplicate
 		duplicateOf = "-"
 	}
 	slog.Info("report created", "request_id", GetRequestID(c), "report_id", reportID,
-		"account", accountID, "client_ip", c.ClientIP(), "category", category, "duplicate_of", duplicateOf)
+		"account", accountID, "client_ip", c.ClientIP(), "category", category, "duplicate_of", duplicateOf, "source", source)
 }
 
 // findDuplicate looks for an earlier report that the new one repeats. Ages
