@@ -4,6 +4,7 @@ import {
   describeFreshness,
   type Location,
   REPORT_CATEGORIES,
+  reportStatusLabel,
   RISK_LEVEL_COLORS,
   WEATHER_ATTRIBUTION,
 } from '@aurarisk/shared';
@@ -98,6 +99,11 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
           </Text>
           <Text style={styles.body} numberOfLines={3}>
             {r.note}
+          </Text>
+          <Text style={styles.meta}>
+            {[r.ward, r.county].filter(Boolean).join(', ')}
+            {r.ward || r.county ? ' · ' : ''}
+            {reportStatusLabel(r)}
           </Text>
         </View>
       ))}

@@ -1,4 +1,4 @@
-import type { ReportCategory, RiskLevel } from './types';
+import type { CommunityReport, ReportCategory, ResponseStatus, RiskLevel } from './types';
 
 export const RISK_LEVELS: readonly RiskLevel[] = ['Normal', 'Advisory', 'Alert', 'Emergency'];
 
@@ -23,6 +23,21 @@ export const REPORT_CATEGORIES: readonly { value: ReportCategory; label: string 
   { value: 'water_rising', label: 'Water rising' },
   { value: 'drainage_issue', label: 'Drainage issue' },
 ];
+
+export const RESPONSE_STATUS_LABELS: Record<ResponseStatus, string> = {
+  open: 'Awaiting county response',
+  acknowledged: 'County acknowledged',
+  resolved: 'County resolved',
+};
+
+/**
+ * One-line status for a report: verification, then the county's response.
+ * Only verified reports are routed to the county, so unverified ones show no response.
+ */
+export function reportStatusLabel(report: Pick<CommunityReport, 'status' | 'response_status'>): string {
+  if (report.status !== 'verified') return 'Unverified';
+  return `Verified · ${RESPONSE_STATUS_LABELS[report.response_status ?? 'open']}`;
+}
 
 // Limits enforced by POST /api/reports (handlers/reports.go). The server counts bytes.
 export const MAX_LOCATION_NAME_BYTES = 200;

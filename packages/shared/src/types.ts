@@ -72,6 +72,9 @@ export interface ReportPhoto {
 /** Moderation status. Public listings show pending and verified reports. */
 export type ModerationStatus = 'pending' | 'verified' | 'rejected';
 
+/** County response, set by the county's responders once a report is verified. */
+export type ResponseStatus = 'open' | 'acknowledged' | 'resolved';
+
 export interface CommunityReport {
   id: string;
   location: Location;
@@ -92,6 +95,10 @@ export interface CommunityReport {
   /** Kenyan county (official name) and ward, when the reporter gave them. */
   county?: string;
   ward?: string;
+  /** Absent from older servers; treat as open. */
+  response_status?: ResponseStatus;
+  /** RFC 3339: when the response status last changed. Absent while open. */
+  response_updated_at?: string;
 }
 
 /** Body of POST /api/reports. */

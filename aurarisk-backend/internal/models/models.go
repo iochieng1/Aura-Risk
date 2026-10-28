@@ -69,6 +69,10 @@ type CommunityReport struct {
 	// Kenyan county (official name) and ward, when the reporter gave them.
 	County *string `json:"county,omitempty"`
 	Ward   *string `json:"ward,omitempty"`
+	// County response: open, acknowledged, or resolved, and when it last
+	// changed (absent while open).
+	ResponseStatus    string     `json:"response_status"`
+	ResponseUpdatedAt *time.Time `json:"response_updated_at,omitempty"`
 }
 
 // ModerationReport is a report as moderators see it.
@@ -83,6 +87,15 @@ type ModerationReport struct {
 	// The reporter's other reports as decided by human moderators.
 	ReporterVerified int `json:"reporter_verified"`
 	ReporterRejected int `json:"reporter_rejected"`
+}
+
+// ResponseEvent is one step in a report's county response.
+type ResponseEvent struct {
+	FromStatus string    `json:"from_status"`
+	ToStatus   string    `json:"to_status"`
+	Actor      string    `json:"actor"`
+	Note       *string   `json:"note"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type ModerationEvent struct {

@@ -1,3 +1,4 @@
+import { reportStatusLabel } from "@aurarisk/shared";
 import type { CommunityReport } from "../types";
 
 const ICONS: Record<string, string> = {
@@ -40,11 +41,13 @@ export default function ReportList({ reports }: { reports: CommunityReport[] }) 
                 {r.location.name}
                 {r.ward ? ` · ${r.ward}` : ""}
                 {r.county ? ` · ${r.county}` : ""} · {timeAgo(r.timestamp)} ·{" "}
-                {r.status === "verified" ? (
-                  <span className="text-green-700 font-medium">Verified</span>
-                ) : (
-                  <span>Unverified</span>
-                )}
+                <span
+                  className={
+                    r.status === "verified" ? "text-green-700 font-medium" : undefined
+                  }
+                >
+                  {reportStatusLabel(r)}
+                </span>
               </p>
             </div>
           </li>
