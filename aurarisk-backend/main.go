@@ -25,6 +25,9 @@ import (
 
 const maxJSONBodyBytes = 64 << 10
 
+// version is the build's commit SHA, set with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	migrateOnly := len(os.Args) == 2 && os.Args[1] == "migrate"
 	if len(os.Args) > 1 && !migrateOnly {
@@ -78,6 +81,7 @@ func main() {
 	}
 
 	handlers.SetDatabase(db)
+	handlers.SetVersion(version)
 
 	staleFor := config.GetDuration("WEATHER_STALE_MAX", 3*time.Hour)
 	if staleFor == 0 {
@@ -305,7 +309,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("🚀 AuraRisk backend running on port %s", port)
+		log.Printf("🚀 AuraRisk backend %s running on port %s", version, port)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Server failed: %v", err)
 		}

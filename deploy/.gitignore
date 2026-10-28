@@ -1,0 +1,3 @@
+# Real settings and secrets; only the *.example templates are committed.
+env/*.env
+backups/

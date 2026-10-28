@@ -18,6 +18,15 @@ const (
 
 var draining atomic.Bool
 
+// buildVersion is reported by /health, to check which build is serving
+// after a deploy or rollback.
+var buildVersion = "dev"
+
+// SetVersion sets the build version /health reports.
+func SetVersion(v string) {
+	buildVersion = v
+}
+
 // SetDraining marks the instance as shutting down: readiness fails so load
 // balancers stop sending new traffic while in-flight requests finish.
 func SetDraining() {
@@ -27,7 +36,7 @@ func SetDraining() {
 // Live reports that the process is up and serving HTTP. It checks no
 // dependencies, so a database or provider outage never gets it restarted.
 func Live(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "version": buildVersion})
 }
 
 // Ready reports whether this instance should receive traffic: 503 when the

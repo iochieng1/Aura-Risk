@@ -1,0 +1,55 @@
+# Single-server production deployment (e.g. a DigitalOcean Droplet; see
+# docs/RELEASE.md). Postgres is managed (DATABASE_URL in the env file), so
+# this server only runs the API and the HTTPS proxy.
+#
+#   cp deploy/env/production.env.example deploy/env/production.env   # fill in
+#   IMAGE_TAG=sha-<commit> docker compose -f deploy/docker-compose.prod.yml \
+#     --env-file deploy/env/production.env up -d
+#
+# IMAGE_TAG pins an immutable image built by CI; rolling back means running
+# the same command with the previous tag.
+name: aurarisk
+
+x-api: &api
+  image: ghcr.io/iochieng1/aurarisk-backend:${IMAGE_TAG:?set IMAGE_TAG to sha-<commit>}
+  env_file: ${ENV_FILE:-env/production.env}
+  environment:
+    APP_ENV: production
+    # Only Caddy (on the compose network) may set X-Forwarded-For.
+    TRUSTED_PROXIES: 172.16.0.0/12
+    METRICS_ADDR: ":9464"
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  # Applies pending migrations, then exits. The API waits for it.
+  migrate:
+    <<: *api
+    command: ["migrate"]
+    restart: "no"
+
+  api:
+    <<: *api
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose: ["8080"]
+    stop_grace_period: 30s
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    depends_on: [api]
+    ports: ["80:80", "443:443", "443:443/udp"]
+    env_file: ${ENV_FILE:-env/production.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The web app's static build (npm run build in aurarisk-frontend).
+      - ${WEB_DIST:-../aurarisk-frontend/dist}:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

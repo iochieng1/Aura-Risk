@@ -157,7 +157,8 @@ background workers are probably down.
 2. Read its logs from the last start. Startup aborts on bad config
    (`Startup aborted: ...`) or an unreachable database (`Failed to ping database`).
 3. If Postgres is down too, follow [PostgresDown](#postgresdown) first.
-4. Restart the instance. If it fails again, roll back the last deploy.
+4. Restart the instance. If it fails again, roll back the last deploy (see
+   [RELEASE.md](RELEASE.md#rolling-back)).
 
 If the API answers on `/health` but this alert is firing, the metrics listener
 is the problem: check `METRICS_ADDR` and network rules between Prometheus and
