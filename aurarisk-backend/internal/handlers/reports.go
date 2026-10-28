@@ -72,20 +72,31 @@ func GetReports(c *gin.Context) {
 		return
 	}
 
-	radius, err := strconv.ParseFloat(radiusStr, 64)
-	if err != nil {
-		respondError(c, http.StatusBadRequest, "invalid radius")
+	if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+		respondError(c, http.StatusBadRequest, "invalid coordinates")
 		return
 	}
 
-	latDelta := radius / 111.0
-	lonDelta := radius / (111.0 * 0.9)
-	getReports(c, county, &[4]float64{lat - latDelta, lat + latDelta, lon - lonDelta, lon + lonDelta})
+	radius, err := strconv.ParseFloat(radiusStr, 64)
+	if err != nil || !(radius > 0 && radius <= maxReportRadiusKm) {
+		respondError(c, http.StatusBadRequest, fmt.Sprintf("radius must be between 0 and %d km", maxReportRadiusKm))
+		return
+	}
+
+	getReports(c, county, &circle{lat: lat, lon: lon, meters: radius * 1000})
 }
 
-// getReports runs the public listing, filtered by county when set and by the
-// box (minLat, maxLat, minLon, maxLon) when non-nil.
-func getReports(c *gin.Context, county string, box *[4]float64) {
+// maxReportRadiusKm caps GET /api/reports searches.
+const maxReportRadiusKm = 200
+
+// circle is a search area: a center and a radius in meters.
+type circle struct {
+	lat, lon, meters float64
+}
+
+// getReports runs the public listing, filtered by county when set and by
+// distance from the center (a true radius, via PostGIS) when area is non-nil.
+func getReports(c *gin.Context, county string, area *circle) {
 	// Rejected reports and duplicates are never public. Pending reports are
 	// shown with their status so clients can mark them unverified.
 	statuses := []string{services.ReportPending, services.ReportVerified}
@@ -96,9 +107,9 @@ func getReports(c *gin.Context, county string, box *[4]float64) {
 	// Filters are added only when used, so each query shape can use its index.
 	args := []any{pq.Array(statuses)}
 	filters := ""
-	if box != nil {
-		args = append(args, box[0], box[1], box[2], box[3])
-		filters += " AND lat BETWEEN $2 AND $3 AND lon BETWEEN $4 AND $5"
+	if area != nil {
+		args = append(args, area.lon, area.lat, area.meters)
+		filters += " AND ST_DWithin(geog, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4)"
 	}
 	if county != "" {
 		args = append(args, county)
@@ -323,18 +334,17 @@ func auditReportCreated(c *gin.Context, reportID, accountID, category, duplicate
 func findDuplicate(tx *sql.Tx, r services.NewReport) (string, error) {
 	radius := float64(max(services.SameReporterRadiusMeters, services.SimilarTextRadiusMeters))
 	window := max(services.SameReporterWindow, services.SimilarTextWindow)
-	minLat, maxLat, minLon, maxLon := services.BoundingBox(r.Lat, r.Lon, radius)
 
 	rows, err := tx.Query(`
 		SELECT id, COALESCE(duplicate_of::text, ''), COALESCE(account_id::text, ''), category, note, lat, lon,
 			EXTRACT(EPOCH FROM NOW() - created_at)
 		FROM community_reports
-		WHERE lat BETWEEN $1 AND $2 AND lon BETWEEN $3 AND $4
-		AND created_at > NOW() - make_interval(secs => $5)
+		WHERE ST_DWithin(geog, ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography, $3)
+		AND created_at > NOW() - make_interval(secs => $4)
 		AND moderation_status <> 'rejected'
 		ORDER BY created_at
 		LIMIT 200
-	`, minLat, maxLat, minLon, maxLon, window.Seconds())
+	`, r.Lon, r.Lat, radius, window.Seconds())
 	if err != nil {
 		return "", err
 	}

@@ -33,7 +33,6 @@ type pendingReport struct {
 	ID        string
 	AccountID sql.NullString
 	Category  string
-	Lat, Lon  float64
 }
 
 func (v *ReportVerifier) Run(ctx context.Context) {
@@ -110,7 +109,7 @@ func (v *ReportVerifier) RunOnce(ctx context.Context) error {
 
 func (v *ReportVerifier) loadPending(ctx context.Context) ([]pendingReport, error) {
 	rows, err := v.DB.QueryContext(ctx, `
-		SELECT id, account_id, category, lat, lon
+		SELECT id, account_id, category
 		FROM community_reports
 		WHERE moderation_status = 'pending' AND moderated_by IS NULL AND duplicate_of IS NULL
 		AND created_at > NOW() - make_interval(secs => $1)
@@ -125,7 +124,7 @@ func (v *ReportVerifier) loadPending(ctx context.Context) ([]pendingReport, erro
 	var reports []pendingReport
 	for rows.Next() {
 		var r pendingReport
-		if err := rows.Scan(&r.ID, &r.AccountID, &r.Category, &r.Lat, &r.Lon); err != nil {
+		if err := rows.Scan(&r.ID, &r.AccountID, &r.Category); err != nil {
 			return nil, err
 		}
 		reports = append(reports, r)
@@ -139,17 +138,16 @@ func (v *ReportVerifier) loadPending(ctx context.Context) ([]pendingReport, erro
 func (v *ReportVerifier) gatherEvidence(ctx context.Context, r pendingReport) (services.Evidence, int, error) {
 	e := services.Evidence{SignedIn: r.AccountID.Valid}
 
-	minLat, maxLat, minLon, maxLon := services.BoundingBox(r.Lat, r.Lon, services.CorroborationRadiusMeters)
 	rows, err := v.DB.QueryContext(ctx, `
-		SELECT o.account_id, o.lat, o.lon
+		SELECT o.account_id
 		FROM community_reports o, community_reports r
 		WHERE r.id = $1 AND o.id <> r.id
 		AND o.duplicate_of IS NULL AND o.moderation_status <> 'rejected'
 		AND o.category = ANY($2)
-		AND o.lat BETWEEN $3 AND $4 AND o.lon BETWEEN $5 AND $6
-		AND o.created_at BETWEEN r.created_at - make_interval(secs => $7) AND r.created_at + make_interval(secs => $7)
+		AND ST_DWithin(o.geog, r.geog, $3)
+		AND o.created_at BETWEEN r.created_at - make_interval(secs => $4) AND r.created_at + make_interval(secs => $4)
 		AND (r.account_id IS NULL OR o.account_id IS DISTINCT FROM r.account_id)
-	`, r.ID, pq.Array(services.CategoriesForGroup(r.Category)), minLat, maxLat, minLon, maxLon,
+	`, r.ID, pq.Array(services.CategoriesForGroup(r.Category)), float64(services.CorroborationRadiusMeters),
 		services.CorroborationWindow.Seconds())
 	if err != nil {
 		return e, 0, err
@@ -160,12 +158,8 @@ func (v *ReportVerifier) gatherEvidence(ctx context.Context, r pendingReport) (s
 	corroborations := 0
 	for rows.Next() {
 		var account sql.NullString
-		var lat, lon float64
-		if err := rows.Scan(&account, &lat, &lon); err != nil {
+		if err := rows.Scan(&account); err != nil {
 			return e, 0, err
-		}
-		if services.DistanceMeters(r.Lat, r.Lon, lat, lon) > services.CorroborationRadiusMeters {
-			continue
 		}
 		corroborations++
 		if account.Valid {

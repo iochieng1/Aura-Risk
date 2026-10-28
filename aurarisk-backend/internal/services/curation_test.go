@@ -16,18 +16,6 @@ func TestDistanceMeters(t *testing.T) {
 	}
 }
 
-func TestBoundingBoxContainsRadius(t *testing.T) {
-	for _, lat := range []float64{0, 45, 80} {
-		minLat, maxLat, minLon, maxLon := BoundingBox(lat, 10, 1000)
-		if DistanceMeters(lat, 10, maxLat, 10) < 999 || DistanceMeters(lat, 10, minLat, 10) < 999 {
-			t.Fatalf("lat %v: latitude bounds narrower than radius", lat)
-		}
-		if DistanceMeters(lat, 10, lat, maxLon) < 999 || DistanceMeters(lat, 10, lat, minLon) < 999 {
-			t.Fatalf("lat %v: longitude bounds narrower than radius", lat)
-		}
-	}
-}
-
 func TestNoteSimilarity(t *testing.T) {
 	cases := []struct {
 		a, b string
