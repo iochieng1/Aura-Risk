@@ -124,7 +124,7 @@ Build for production with `npm run build`.
     "model_version": "heuristic-2"
   }
   ```
-- `GET /api/reports?lat=<lat>&lon=<lon>&radius=<km>`: up to 50 nearby reports. Add `county=<name>` to keep only one Kenyan county's reports, or pass `county` alone (no `lat`/`lon`) to list that county's latest reports.
+- `GET /api/reports?lat=<lat>&lon=<lon>&radius=<km>`: up to 50 reports within `radius` km (default 10, at most 200), measured as true distance with PostGIS. Add `county=<name>` to keep only one Kenyan county's reports, or pass `county` alone (no `lat`/`lon`) to list that county's latest reports.
 - `POST /api/reports`: creates a community report. Optional `county` (any of Kenya's 47 counties; case, a trailing "County" and spaces or hyphens are ignored, and the official name is stored) and `ward` (free text, up to 100 bytes, needs a county). Reports return both when set.
 
 The report endpoint expects `location`, `category`, and `note`. Valid categories are `flooding`, `road_blocked`, `water_rising`, and `drainage_issue`.
@@ -180,7 +180,7 @@ Databases created by the old startup migration have a `schema_version` table. It
 - ~~Add Prometheus-compatible metrics.~~ Done (see [ON_CALL.md](ON_CALL.md)). ~~Centralized logs with correlation IDs.~~ Done: JSON logs with `request_id`, shipped to Loki (see [ON_CALL.md](ON_CALL.md#finding-logs)).
 - ~~Expose data freshness in the UI.~~ Done: the web and mobile risk views show the weather data's age and flag cached or outdated data.
 - ~~Return confidence, source timestamps, and model version with risk assessments.~~ Done: see [Model version and confidence](#model-version-and-confidence).
-- Use PostGIS or a geospatial index for accurate radius searches instead of a latitude/longitude bounding box.
+- ~~Use PostGIS or a geospatial index for accurate radius searches instead of a latitude/longitude bounding box.~~ Done (#18): reports have a generated `geog` column with GiST indexes, and the listing, duplicate detection and corroboration use `ST_DWithin`.
 - ~~Add report verification, duplicate detection, moderation status, and retention policies.~~ Done: see [REPORT_CURATION.md](REPORT_CURATION.md).
 - ~~Add accessible loading, empty, error, and offline states in the frontend.~~ Done, with a screen-reader list alternative to the map and the decision-support notice.
 - ~~Add monitoring alerts for API latency, provider failures, database saturation, and stale weather data.~~ Done: dashboards, alert rules, routing, and on-call ownership are in `observability/` and [ON_CALL.md](ON_CALL.md).

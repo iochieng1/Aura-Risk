@@ -18,7 +18,7 @@ reflects the repository on 2026-10-12. Update it as issues close.
 | Issue | Priority | Assessment | Effort* | Blocks public launch? |
 |---|---|---|---|---|
 | [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | p0 | **~90% done.** CI runs and passes on every PR; missing: required checks and database-failure tests | S | Yes (release gate) |
-| [#18 PostGIS](https://github.com/iochieng1/Aura-Risk/issues/18) | p1 | **Not started**, but well scoped. Also the foundation for #22's terrain data | M | Indirectly, through #22 |
+| [#18 PostGIS](https://github.com/iochieng1/Aura-Risk/issues/18) | p1 | **Done.** Migration 007 adds a generated `geog` column, GiST indexes and `ST_DWithin` radius search | M | Indirectly, through #22 |
 | [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | p0 | **Planned, not started.** The biggest and most important item | L | **Yes (release gate)** |
 | [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | p0 | **Partly done.** Free demo is live; production hosting, runbooks and restore drills are not | M–L | **Yes (release gates)** |
 

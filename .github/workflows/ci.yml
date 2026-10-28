@@ -21,7 +21,8 @@ jobs:
         working-directory: aurarisk-backend
     services:
       postgres:
-        image: postgres:16-alpine
+        # PostGIS is required by migration 007 (#18).
+        image: postgis/postgis:16-3.5-alpine
         env:
           POSTGRES_PASSWORD: ci-only-password
           POSTGRES_DB: aurarisk_test

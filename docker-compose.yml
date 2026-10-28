@@ -2,7 +2,7 @@
 # Compose refuses to start if any of them are missing.
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.5-alpine
     container_name: aurarisk-db
     restart: unless-stopped
     environment:

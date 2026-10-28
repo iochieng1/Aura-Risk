@@ -85,20 +85,6 @@ func DistanceMeters(lat1, lon1, lat2, lon2 float64) float64 {
 	return 2 * earthRadius * math.Asin(math.Min(1, math.Sqrt(a)))
 }
 
-// BoundingBox returns lat/lon bounds that contain every point within
-// radiusMeters of the center, for an index-friendly SQL prefilter.
-func BoundingBox(lat, lon, radiusMeters float64) (minLat, maxLat, minLon, maxLon float64) {
-	// Slightly under the true ~111.2 km per degree, so the box errs larger.
-	const metersPerDegree = 111_000.0
-	latDelta := radiusMeters / metersPerDegree
-	cos := math.Cos(lat * math.Pi / 180)
-	lonDelta := 180.0
-	if cos > 0.01 {
-		lonDelta = math.Min(180, radiusMeters/(metersPerDegree*cos))
-	}
-	return lat - latDelta, lat + latDelta, lon - lonDelta, lon + lonDelta
-}
-
 // noteTokens lowercases the note and splits it into words, ignoring
 // punctuation so "Water rising!!" and "water rising" compare equal.
 func noteTokens(note string) map[string]bool {
