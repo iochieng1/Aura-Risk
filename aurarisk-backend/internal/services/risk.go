@@ -233,12 +233,23 @@ func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName 
 // itself, for when the server's own calls are refused (e.g. a shared egress
 // IP over the free API's daily limit). The data is checked with
 // ValidateClientWeather first; it is never cached or used for push alerts.
-// Ground and river inputs are still the server's own.
-func AssessClientWeather(ctx context.Context, lat, lon float64, locationName string, weather *OpenMeteoResponse, now time.Time) *models.RiskAssessment {
+// Ground and river inputs are the server's own where it has them; client
+// ones (checked with ClientTerrain and ClientRiver) only fill the gaps.
+func AssessClientWeather(ctx context.Context, lat, lon float64, locationName string, weather *OpenMeteoResponse, client Hydrology, now time.Time) *models.RiskAssessment {
 	h, configured := getHydrology(ctx, lat, lon)
+	var fromDevice []string
+	if h.Terrain == nil && client.Terrain != nil {
+		h.Terrain = client.Terrain
+		fromDevice = append(fromDevice, "Ground elevation was fetched by your device rather than the AuraRisk server.")
+	}
+	if h.River == nil && client.River != nil {
+		h.River = client.River
+		fromDevice = append(fromDevice, "River discharge was fetched by your device rather than the AuraRisk server.")
+	}
 	risk := assess(lat, lon, locationName, WeatherResult{Data: weather, FetchedAt: now}, h, configured, now)
 	risk.Confidence.Reasons = append(risk.Confidence.Reasons,
 		"Weather data was fetched by your device rather than the AuraRisk server.")
+	risk.Confidence.Reasons = append(risk.Confidence.Reasons, fromDevice...)
 	return risk
 }
 

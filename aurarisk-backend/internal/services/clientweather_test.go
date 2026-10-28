@@ -64,7 +64,7 @@ func TestValidateClientWeatherRejects(t *testing.T) {
 
 func TestAssessClientWeatherNotesTheSource(t *testing.T) {
 	now := time.Date(2026, 10, 12, 12, 7, 0, 0, time.UTC)
-	risk := AssessClientWeather(context.Background(), 1, 2, "Kisumu", clientWeather(now), now)
+	risk := AssessClientWeather(context.Background(), 1, 2, "Kisumu", clientWeather(now), Hydrology{}, now)
 	if risk.Stale || !risk.SourceTimestamps.WeatherFetchedAt.Equal(now) {
 		t.Errorf("stale=%v fetched=%v", risk.Stale, risk.SourceTimestamps.WeatherFetchedAt)
 	}

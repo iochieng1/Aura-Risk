@@ -63,6 +63,10 @@ type clientWeatherRiskRequest struct {
 	Lat     *float64                    `json:"lat"`
 	Lon     *float64                    `json:"lon"`
 	Weather *services.OpenMeteoResponse `json:"weather"`
+	// Optional Elevation and Flood API responses fetched by the client too,
+	// used only where the server has no data of its own (#69).
+	Elevation *services.ClientElevation `json:"elevation"`
+	Flood     []services.RiverSeries    `json:"flood"`
 }
 
 // PostRiskWithWeather scores weather the client fetched from Open-Meteo
@@ -88,5 +92,17 @@ func PostRiskWithWeather(c *gin.Context) {
 		return
 	}
 
-	respondRisk(c, services.AssessClientWeather(c.Request.Context(), *req.Lat, *req.Lon, "Selected Location", req.Weather, now))
+	terrain, err := services.ClientTerrain(req.Elevation)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	river, err := services.ClientRiver(req.Flood, *req.Lat, *req.Lon, now)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	client := services.Hydrology{Terrain: terrain, River: river}
+
+	respondRisk(c, services.AssessClientWeather(c.Request.Context(), *req.Lat, *req.Lon, "Selected Location", req.Weather, client, now))
 }

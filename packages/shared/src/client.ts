@@ -2,7 +2,7 @@ import { DEFAULT_REPORT_RADIUS_KM } from './constants';
 import type { Lang } from './i18n';
 import type { CommunityReport, Coordinates, CountyStatsResponse, Location, NewReportInput, RiskAssessment } from './types';
 import { type FieldErrors, isCommunityReport, isRiskAssessment, validateNewReport } from './validation';
-import { openMeteoForecastUrl } from './weather';
+import { openMeteoElevationUrl, openMeteoFloodUrl, openMeteoForecastUrl } from './weather';
 
 export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -115,19 +115,37 @@ export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = t
 
   // Fetches weather on this device and asks the server to score it. If that
   // fails too, the server's original 503 is what the caller sees.
-  const riskFromDeviceWeather = async ({ lat, lon }: Coordinates, serverError: ApiError): Promise<unknown> => {
-    let weather: unknown;
+  // Ground and river data are optional: without them the score leaves
+  // those terms out, as it does when the server can't get them either.
+  const fetchOptional = async (url: string): Promise<unknown> => {
     try {
-      const response = await doFetch(openMeteoForecastUrl({ lat, lon }));
-      if (!response.ok) throw serverError;
-      weather = await response.json();
+      const response = await doFetch(url);
+      return response.ok ? await response.json() : undefined;
     } catch {
-      throw serverError;
+      return undefined;
     }
+  };
+
+  const riskFromDeviceWeather = async ({ lat, lon }: Coordinates, serverError: ApiError): Promise<unknown> => {
+    const [weather, elevation, flood] = await Promise.all([
+      (async () => {
+        try {
+          const response = await doFetch(openMeteoForecastUrl({ lat, lon }));
+          if (!response.ok) return undefined;
+          return await response.json();
+        } catch {
+          return undefined;
+        }
+      })(),
+      fetchOptional(openMeteoElevationUrl({ lat, lon })),
+      fetchOptional(openMeteoFloodUrl({ lat, lon })),
+    ]);
+    if (weather === undefined) throw serverError;
     return request(`/api/risk${langQuery('?')}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lat, lon, weather }),
+      // The Flood API returns one object per cell for several locations.
+      body: JSON.stringify({ lat, lon, weather, elevation, flood: Array.isArray(flood) ? flood : undefined }),
     });
   };
 
