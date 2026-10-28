@@ -102,6 +102,7 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
           </Text>
           <Text style={styles.meta}>
             {[r.ward, r.county].filter(Boolean).join(', ')}
+            {r.location_approximate ? ` (${t('report.approximate')})` : ''}
             {r.ward || r.county ? ' · ' : ''}
             {reportStatusLabel(r, lang)}
           </Text>

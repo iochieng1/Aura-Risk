@@ -52,20 +52,28 @@ func LocalizeRisk(risk *models.RiskAssessment, lang string) {
 	if lang != LangSwahili {
 		return
 	}
-	level := swahiliLevels[risk.Level]
-	if level == "" {
-		level = risk.Level
-	}
-	risk.Summary = fmt.Sprintf(swahiliSummary, risk.Location.Name, level, risk.Score)
+	risk.Summary = fmt.Sprintf(swahiliSummary, risk.Location.Name, LevelName(lang, risk.Level), risk.Score)
 	tips := make([]string, len(risk.Tips))
 	for i, tip := range risk.Tips {
-		if sw, ok := swahiliTips[tip]; ok {
-			tips[i] = sw
-		} else {
-			tips[i] = tip
-		}
+		tips[i] = Tip(lang, tip)
 	}
 	risk.Tips = tips
+}
+
+// LevelName returns a risk level's name in lang, falling back to English.
+func LevelName(lang, level string) string {
+	if sw := swahiliLevels[level]; lang == LangSwahili && sw != "" {
+		return sw
+	}
+	return level
+}
+
+// Tip returns one of GetTips' English tips in lang, falling back to English.
+func Tip(lang, tip string) string {
+	if sw := swahiliTips[tip]; lang == LangSwahili && sw != "" {
+		return sw
+	}
+	return tip
 }
 
 // NegotiateLanguage picks the response language: an explicit lang (en or sw,
