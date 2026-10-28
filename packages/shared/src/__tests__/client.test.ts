@@ -153,3 +153,24 @@ describe('createApiClient', () => {
     });
   });
 });
+
+describe('county stats and open data', () => {
+  it('passes the period and builds export links', async () => {
+    const fetch = jest.fn(async () => json({ from: '2026-01-01', to: '2026-03-31', counties: [] }));
+    const client = createApiClient({ baseUrl: 'http://api.test', fetch });
+
+    const stats = await client.getCountyStats({ from: '2026-01-01', to: '2026-03-31' });
+
+    expect(fetch).toHaveBeenCalledWith('http://api.test/api/stats/counties?from=2026-01-01&to=2026-03-31', undefined);
+    expect(stats.counties).toEqual([]);
+    expect(client.openDataUrl('csv', { county: 'Homa Bay' })).toBe(
+      'http://api.test/api/open-data/reports.csv?county=Homa%20Bay'
+    );
+    expect(client.openDataUrl('json')).toBe('http://api.test/api/open-data/reports.json');
+  });
+
+  it('rejects a malformed stats body', async () => {
+    const client = createApiClient({ baseUrl: '', fetch: async () => json({ counties: 'none' }) });
+    await expect(client.getCountyStats()).rejects.toBeInstanceOf(MalformedResponseError);
+  });
+});

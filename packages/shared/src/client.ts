@@ -1,5 +1,5 @@
 import { DEFAULT_REPORT_RADIUS_KM } from './constants';
-import type { CommunityReport, Coordinates, Location, NewReportInput, RiskAssessment } from './types';
+import type { CommunityReport, Coordinates, CountyStatsResponse, Location, NewReportInput, RiskAssessment } from './types';
 import { type FieldErrors, isCommunityReport, isRiskAssessment, validateNewReport } from './validation';
 import { openMeteoForecastUrl } from './weather';
 
@@ -63,7 +63,17 @@ export interface ApiClient {
   getReports(at: Coordinates, radiusKm?: number): Promise<CommunityReport[]>;
   /** POST /api/reports. Validates first and throws ValidationError without sending. */
   createReport(input: NewReportInput): Promise<CommunityReport>;
+  /** GET /api/stats/counties. Dates are YYYY-MM-DD; the server defaults to the last 90 days. */
+  getCountyStats(period?: StatsPeriod): Promise<CountyStatsResponse>;
+  /** Download link for the open data export (CC BY 4.0). */
+  openDataUrl(format: 'csv' | 'json', period?: StatsPeriod & { county?: string }): string;
 }
+
+/** Dates are YYYY-MM-DD, inclusive. */
+export type StatsPeriod = {
+  from?: string;
+  to?: string;
+};
 
 const readError = async (response: Response): Promise<ApiError> => {
   let message = `Request failed (${response.status})`;
@@ -142,5 +152,25 @@ export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = t
       if (!isCommunityReport(body)) throw new MalformedResponseError('report');
       return body;
     },
+
+    async getCountyStats(period = {}) {
+      const body = await request(`/api/stats/counties${periodQuery(period)}`);
+      if (!body || typeof body !== 'object' || !Array.isArray((body as CountyStatsResponse).counties)) {
+        throw new MalformedResponseError('county stats');
+      }
+      return body as CountyStatsResponse;
+    },
+
+    openDataUrl(format, period = {}) {
+      return `${root}/api/open-data/reports.${format}${periodQuery(period)}`;
+    },
   };
 }
+
+const periodQuery = (params: Record<string, string | undefined>): string => {
+  const query = Object.entries(params)
+    .filter((entry): entry is [string, string] => !!entry[1])
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
+  return query ? `?${query}` : '';
+};

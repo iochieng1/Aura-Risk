@@ -101,6 +101,25 @@ export interface CommunityReport {
   response_updated_at?: string;
 }
 
+/** One county's row in GET /api/stats/counties (verified reports created in the period). */
+export interface CountyStats {
+  county: string;
+  verified: number;
+  open: number;
+  acknowledged: number;
+  resolved: number;
+  /** From report creation, in hours; null when no report reached that step. */
+  median_hours_to_acknowledge: number | null;
+  median_hours_to_resolve: number | null;
+}
+
+export interface CountyStatsResponse {
+  /** YYYY-MM-DD, inclusive. */
+  from: string;
+  to: string;
+  counties: CountyStats[];
+}
+
 /** Body of POST /api/reports. */
 export interface NewReportInput {
   location: Location;

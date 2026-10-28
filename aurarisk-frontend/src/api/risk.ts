@@ -1,5 +1,5 @@
 import type { Location, RiskAssessment, CommunityReport, NewReportDetails } from "../types";
-import { createApiClient } from "@aurarisk/shared";
+import { createApiClient, type CountyStatsResponse, type StatsPeriod } from "@aurarisk/shared";
 
 // Empty means same origin: the Vite dev server proxies /api to the backend,
 // and in production a reverse proxy can do the same.
@@ -23,4 +23,12 @@ export async function fetchReports(location: Location): Promise<CommunityReport[
 export async function submitReport(location: Location, details: NewReportDetails): Promise<CommunityReport> {
   if (USE_MOCK) return (await loadMock()).createMockReport({ location, ...details });
   return api.createReport({ location, ...details });
+}
+
+export function fetchCountyStats(period: StatsPeriod): Promise<CountyStatsResponse> {
+  return api.getCountyStats(period);
+}
+
+export function openDataUrl(format: "csv" | "json", period: StatsPeriod & { county?: string }): string {
+  return api.openDataUrl(format, period);
 }
