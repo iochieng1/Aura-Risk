@@ -17,10 +17,10 @@ reflects the repository on 2026-10-12. Update it as issues close.
 
 | Issue | Priority | Assessment | Effort* | Blocks public launch? |
 |---|---|---|---|---|
-| [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | p0 | **~90% done.** CI runs and passes on every PR; missing: required checks and database-failure tests | S | Yes (release gate) |
+| [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | p0 | **Done.** All CI jobs are required on `main`; database-failure tests added (#73) | S | Yes (release gate) |
 | [#18 PostGIS](https://github.com/iochieng1/Aura-Risk/issues/18) | p1 | **Done.** Migration 007 adds a generated `geog` column, GiST indexes and `ST_DWithin` radius search | M | Indirectly, through #22 |
-| [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | p0 | **Planned, not started.** The biggest and most important item | L | **Yes (release gate)** |
-| [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | p0 | **Partly done.** Free demo is live; production hosting, runbooks and restore drills are not | M–L | **Yes (release gates)** |
+| [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | p0 | **In progress.** Real elevation and river inputs (#57); backtests with dry and wet controls ([BACKTEST.md](BACKTEST.md)). Static layers, more events, real forecasts, tuning and expert review remain | L | **Yes (release gate)** |
+| [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | p0 | **Mostly done.** Immutable images, HTTPS proxy, env templates, runbooks ([RELEASE.md](RELEASE.md)) and a rehearsed restore drill; a drill on a production backup waits for production hosting | M–L | **Yes (release gates)** |
 
 \* Rough effort for one developer: **S** = a few days, **M** = 1–2 weeks,
 **L** = several weeks. Most of #22 is research and data work rather than code.
