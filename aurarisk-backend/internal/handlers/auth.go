@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log"
@@ -40,7 +41,7 @@ type refreshRequest struct {
 
 var validPlatforms = map[string]bool{"ios": true, "android": true, "web": true}
 
-func issueTokens(tx *sql.Tx, accountID, deviceID string) (*TokenPair, error) {
+func issueTokens(ctx context.Context, tx *sql.Tx, accountID, deviceID string) (*TokenPair, error) {
 	access, err := services.NewToken()
 	if err != nil {
 		return nil, err
@@ -60,7 +61,7 @@ func issueTokens(tx *sql.Tx, accountID, deviceID string) (*TokenPair, error) {
 		RefreshExpiresAt: now.Add(RefreshTokenTTL),
 	}
 
-	_, err = tx.Exec(`
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO auth_tokens (token_hash, device_id, kind, expires_at)
 		VALUES ($1, $2, 'access', $3), ($4, $2, 'refresh', $5)
 	`, services.HashToken(access), deviceID, pair.AccessExpiresAt, services.HashToken(refresh), pair.RefreshExpiresAt)
@@ -85,7 +86,7 @@ func RegisterDevice(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -93,11 +94,11 @@ func RegisterDevice(c *gin.Context) {
 	defer tx.Rollback()
 
 	var accountID, deviceID string
-	if err := tx.QueryRow(`INSERT INTO accounts DEFAULT VALUES RETURNING id`).Scan(&accountID); err != nil {
+	if err := tx.QueryRowContext(c.Request.Context(), `INSERT INTO accounts DEFAULT VALUES RETURNING id`).Scan(&accountID); err != nil {
 		internalError(c, err)
 		return
 	}
-	if err := tx.QueryRow(`
+	if err := tx.QueryRowContext(c.Request.Context(), `
 		INSERT INTO devices (account_id, platform, app_version)
 		VALUES ($1, $2, NULLIF($3, ''))
 		RETURNING id
@@ -106,7 +107,7 @@ func RegisterDevice(c *gin.Context) {
 		return
 	}
 
-	pair, err := issueTokens(tx, accountID, deviceID)
+	pair, err := issueTokens(c.Request.Context(), tx, accountID, deviceID)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -129,7 +130,7 @@ func RefreshTokens(c *gin.Context) {
 		return
 	}
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -141,7 +142,7 @@ func RefreshTokens(c *gin.Context) {
 		expiresAt                 time.Time
 		revokedAt                 sql.NullTime
 	)
-	err = tx.QueryRow(`
+	err = tx.QueryRowContext(c.Request.Context(), `
 		SELECT t.device_id, d.account_id, t.kind, t.expires_at, t.revoked_at
 		FROM auth_tokens t
 		JOIN devices d ON d.id = t.device_id
@@ -158,7 +159,7 @@ func RefreshTokens(c *gin.Context) {
 	}
 
 	if revokedAt.Valid {
-		if _, err := tx.Exec(`UPDATE auth_tokens SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL`, deviceID); err != nil {
+		if _, err := tx.ExecContext(c.Request.Context(), `UPDATE auth_tokens SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL`, deviceID); err != nil {
 			internalError(c, err)
 			return
 		}
@@ -175,21 +176,21 @@ func RefreshTokens(c *gin.Context) {
 		return
 	}
 
-	if _, err := tx.Exec(`UPDATE auth_tokens SET revoked_at = NOW() WHERE token_hash = $1`, services.HashToken(req.RefreshToken)); err != nil {
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE auth_tokens SET revoked_at = NOW() WHERE token_hash = $1`, services.HashToken(req.RefreshToken)); err != nil {
 		internalError(c, err)
 		return
 	}
 	// Expired rows are no longer needed for reuse detection.
-	if _, err := tx.Exec(`DELETE FROM auth_tokens WHERE device_id = $1 AND expires_at < NOW() - INTERVAL '1 day'`, deviceID); err != nil {
+	if _, err := tx.ExecContext(c.Request.Context(), `DELETE FROM auth_tokens WHERE device_id = $1 AND expires_at < NOW() - INTERVAL '1 day'`, deviceID); err != nil {
 		internalError(c, err)
 		return
 	}
-	if _, err := tx.Exec(`UPDATE devices SET last_seen_at = NOW() WHERE id = $1`, deviceID); err != nil {
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE devices SET last_seen_at = NOW() WHERE id = $1`, deviceID); err != nil {
 		internalError(c, err)
 		return
 	}
 
-	pair, err := issueTokens(tx, accountID, deviceID)
+	pair, err := issueTokens(c.Request.Context(), tx, accountID, deviceID)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -205,18 +206,18 @@ func RefreshTokens(c *gin.Context) {
 func Logout(c *gin.Context) {
 	deviceID := c.GetString(ctxDeviceID)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		internalError(c, err)
 		return
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Exec(`UPDATE auth_tokens SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL`, deviceID); err != nil {
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE auth_tokens SET revoked_at = NOW() WHERE device_id = $1 AND revoked_at IS NULL`, deviceID); err != nil {
 		internalError(c, err)
 		return
 	}
-	if _, err := tx.Exec(`UPDATE devices SET push_token = NULL, push_consented_at = NULL WHERE id = $1`, deviceID); err != nil {
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE devices SET push_token = NULL, push_consented_at = NULL WHERE id = $1`, deviceID); err != nil {
 		internalError(c, err)
 		return
 	}
@@ -231,7 +232,7 @@ func Logout(c *gin.Context) {
 // DeleteAccount removes the account, its devices, tokens, and subscriptions.
 // Community reports and photos stay public but are no longer linked to it.
 func DeleteAccount(c *gin.Context) {
-	if _, err := db.Exec(`DELETE FROM accounts WHERE id = $1`, c.GetString(ctxAccountID)); err != nil {
+	if _, err := db.ExecContext(c.Request.Context(), `DELETE FROM accounts WHERE id = $1`, c.GetString(ctxAccountID)); err != nil {
 		internalError(c, err)
 		return
 	}
@@ -252,7 +253,7 @@ func bearerToken(c *gin.Context) (string, bool) {
 
 func authenticate(c *gin.Context, token string) bool {
 	var accountID, deviceID string
-	err := db.QueryRow(`
+	err := db.QueryRowContext(c.Request.Context(), `
 		SELECT d.account_id, t.device_id
 		FROM auth_tokens t
 		JOIN devices d ON d.id = t.device_id

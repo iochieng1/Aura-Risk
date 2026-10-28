@@ -72,7 +72,7 @@ func CreatePhotoUpload(c *gin.Context) {
 
 	accountID := c.GetString(ctxAccountID)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -80,7 +80,7 @@ func CreatePhotoUpload(c *gin.Context) {
 	defer tx.Rollback()
 
 	var owner sql.NullString
-	err = tx.QueryRow(`SELECT account_id FROM community_reports WHERE id = $1 FOR UPDATE`, reportID).Scan(&owner)
+	err = tx.QueryRowContext(c.Request.Context(), `SELECT account_id FROM community_reports WHERE id = $1 FOR UPDATE`, reportID).Scan(&owner)
 	if errors.Is(err, sql.ErrNoRows) {
 		respondError(c, http.StatusNotFound, "report not found")
 		return
@@ -95,7 +95,7 @@ func CreatePhotoUpload(c *gin.Context) {
 	}
 
 	var count int
-	if err := tx.QueryRow(`
+	if err := tx.QueryRowContext(c.Request.Context(), `
 		SELECT COUNT(*) FROM report_photos
 		WHERE report_id = $1
 		AND (status IN ('processing', 'ready')
@@ -110,13 +110,13 @@ func CreatePhotoUpload(c *gin.Context) {
 	}
 
 	var photoID string
-	if err := tx.QueryRow(`SELECT gen_random_uuid()`).Scan(&photoID); err != nil {
+	if err := tx.QueryRowContext(c.Request.Context(), `SELECT gen_random_uuid()`).Scan(&photoID); err != nil {
 		internalError(c, err)
 		return
 	}
 	key := QuarantineKey(reportID, photoID)
 
-	if _, err := tx.Exec(`
+	if _, err := tx.ExecContext(c.Request.Context(), `
 		INSERT INTO report_photos (id, report_id, account_id, status, content_type, size_bytes, quarantine_key)
 		VALUES ($1, $2, $3, 'pending_upload', $4, $5, $6)
 	`, photoID, reportID, accountID, req.ContentType, req.SizeBytes, key); err != nil {
@@ -155,7 +155,7 @@ func CompletePhotoUpload(c *gin.Context) {
 	// upload URL expires, so they can't be completed afterwards either.
 	var status string
 	var expired bool
-	err := db.QueryRow(`
+	err := db.QueryRowContext(c.Request.Context(), `
 		UPDATE report_photos
 		SET status = CASE WHEN status = 'pending_upload' AND NOT expired THEN 'processing' ELSE status END,
 			updated_at = CASE WHEN status = 'pending_upload' AND NOT expired THEN NOW() ELSE updated_at END
@@ -190,7 +190,7 @@ func GetPhoto(c *gin.Context) {
 		photo              models.Photo
 		largeKey, thumbKey sql.NullString
 	)
-	err := db.QueryRow(`
+	err := db.QueryRowContext(c.Request.Context(), `
 		SELECT id, status, large_key, thumb_key FROM report_photos
 		WHERE id = $1 AND account_id = $2
 	`, id, c.GetString(ctxAccountID)).Scan(&photo.ID, &photo.Status, &largeKey, &thumbKey)
@@ -223,7 +223,7 @@ func readyPhotosByReport(c *gin.Context, reportIDs []string) (map[string][]model
 		return result, nil
 	}
 
-	rows, err := db.Query(`
+	rows, err := db.QueryContext(c.Request.Context(), `
 		SELECT id, report_id, large_key, thumb_key FROM report_photos
 		WHERE report_id = ANY($1) AND status = 'ready'
 		ORDER BY created_at

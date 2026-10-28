@@ -109,3 +109,20 @@ func TestMigrateFromLegacySchemaVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWithConnectTimeout(t *testing.T) {
+	for in, want := range map[string]string{
+		"postgres://u:p@db/app?sslmode=require":   "postgres://u:p@db/app?connect_timeout=5&sslmode=require",
+		"postgres://u:p@db/app?connect_timeout=2": "postgres://u:p@db/app?connect_timeout=2",
+		"host=db user=u dbname=app":               "host=db user=u dbname=app connect_timeout=5",
+		"host=db connect_timeout=9":               "host=db connect_timeout=9",
+		"postgresql://u@db/app":                   "postgresql://u@db/app?connect_timeout=5",
+	} {
+		if got := WithConnectTimeout(in, ""); got != want {
+			t.Errorf("WithConnectTimeout(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if got := WithConnectTimeout("postgres://db/app", "3"); got != "postgres://db/app?connect_timeout=3" {
+		t.Errorf("custom timeout: %q", got)
+	}
+}

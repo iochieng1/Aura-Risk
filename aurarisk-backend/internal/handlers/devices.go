@@ -32,7 +32,7 @@ func RegisterPushToken(c *gin.Context) {
 
 	deviceID := c.GetString(ctxDeviceID)
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(c.Request.Context(), nil)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -40,13 +40,13 @@ func RegisterPushToken(c *gin.Context) {
 	defer tx.Rollback()
 
 	// A reinstall can hand the same token to a new device record.
-	if _, err := tx.Exec(`UPDATE devices SET push_token = NULL, push_consented_at = NULL WHERE push_token = $1 AND id <> $2`, req.PushToken, deviceID); err != nil {
+	if _, err := tx.ExecContext(c.Request.Context(), `UPDATE devices SET push_token = NULL, push_consented_at = NULL WHERE push_token = $1 AND id <> $2`, req.PushToken, deviceID); err != nil {
 		internalError(c, err)
 		return
 	}
 
 	var consentedAt time.Time
-	err = tx.QueryRow(`
+	err = tx.QueryRowContext(c.Request.Context(), `
 		UPDATE devices
 		SET push_token = $1,
 			push_consented_at = COALESCE(push_consented_at, NOW()),
@@ -68,7 +68,7 @@ func RegisterPushToken(c *gin.Context) {
 
 // UnregisterPushToken withdraws consent and forgets the token.
 func UnregisterPushToken(c *gin.Context) {
-	_, err := db.Exec(`UPDATE devices SET push_token = NULL, push_consented_at = NULL WHERE id = $1`, c.GetString(ctxDeviceID))
+	_, err := db.ExecContext(c.Request.Context(), `UPDATE devices SET push_token = NULL, push_consented_at = NULL WHERE id = $1`, c.GetString(ctxDeviceID))
 	if err != nil {
 		internalError(c, err)
 		return

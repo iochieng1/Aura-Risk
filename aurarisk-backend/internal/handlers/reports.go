@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -125,7 +126,7 @@ func getReports(c *gin.Context, county string, area *circle) {
 		LIMIT 50
 	`
 
-	rows, err := db.Query(query, args...)
+	rows, err := db.QueryContext(c.Request.Context(), query, args...)
 	if err != nil {
 		internalError(c, err)
 		return
@@ -232,7 +233,7 @@ func CreateReport(c *gin.Context) {
 	}
 	defer tx.Rollback()
 
-	duplicateOf, err := findDuplicate(tx, services.NewReport{
+	duplicateOf, err := findDuplicate(c.Request.Context(), tx, services.NewReport{
 		AccountID: accountID.String,
 		Category:  req.Category,
 		Note:      req.Note,
@@ -253,7 +254,7 @@ func CreateReport(c *gin.Context) {
 
 	var id string
 	var createdAt time.Time
-	err = tx.QueryRow(
+	err = tx.QueryRowContext(c.Request.Context(),
 		query,
 		req.Location.Name,
 		req.Location.Lat,
@@ -335,11 +336,11 @@ func auditReportCreated(c *gin.Context, reportID, accountID, category, duplicate
 
 // findDuplicate looks for an earlier report that the new one repeats. Ages
 // are computed in SQL because created_at has no time zone.
-func findDuplicate(tx *sql.Tx, r services.NewReport) (string, error) {
+func findDuplicate(ctx context.Context, tx *sql.Tx, r services.NewReport) (string, error) {
 	radius := float64(max(services.SameReporterRadiusMeters, services.SimilarTextRadiusMeters))
 	window := max(services.SameReporterWindow, services.SimilarTextWindow)
 
-	rows, err := tx.Query(`
+	rows, err := tx.QueryContext(ctx, `
 		SELECT id, COALESCE(duplicate_of::text, ''), COALESCE(account_id::text, ''), category, note, lat, lon,
 			EXTRACT(EPOCH FROM NOW() - created_at)
 		FROM community_reports
