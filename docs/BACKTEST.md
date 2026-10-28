@@ -96,12 +96,56 @@ are in
 - **Too few events.** 20 floods, Kisumu has 4 and Budalang'i 1. No numbers
   here are reliable per region.
 
+### Wet-season controls
+
+[`backtest/kenya-2024-long-rains-wet-controls.csv`](backtest/kenya-2024-long-rains-wet-controls.csv)
+keeps the same 20 flood days. Each control is the **same place 28 days
+before its flood**, which falls in mid-March to mid-April, inside the long
+rains. These days weren't checked for unreported flooding. Results are in
+[`backtest/kenya-2024-long-rains-wet-controls.heuristic-2.json`](backtest/kenya-2024-long-rains-wet-controls.heuristic-2.json).
+
+| Region | Floods | Detected | Wet controls | False alarms | Median lead |
+|---|---|---|---|---|---|
+| Kisumu | 4 | 4 | 4 | 3 | 58 h |
+| Nairobi | 7 | 7 | 7 | 4 | 34 h |
+| Tana / Garissa | 4 | 4 | 4 | 4 | 72 h |
+| Busia (Budalang'i) | 1 | 1 | 1 | 1 | 43 h |
+| Other | 4 | 4 | 4 | 0 | 72 h |
+| **All** | **20** | **20 (100%)** | **20** | **12 (60%)** | **61 h** |
+
+**The score doesn't yet separate flood days from rainy days.** On wet days with
+no reported flood, it warned 60% of the time, against 20% on the dry-season
+controls.
+- Every Tana/Garissa and Lake Victoria basin control reached **Emergency**
+  (100/100). The output doesn't break the score into its terms, so it
+  doesn't show which ones drove it. Recording each term per hour would be a
+  useful addition to the backtest.
+- The Nairobi controls that warned were the four dated 26 March, during heavy
+  rain in the city.
+- The places that stayed quiet had little rain on those days.
+
+Some of these "false alarms" may be real floods that weren't reported. That
+is plausible for the Tana and Nyando basins, which were already high by early
+April. Even so, a warning that is on for weeks across a whole basin tells
+residents little.
+
+What this suggests for tuning, to test rather than assume:
+- **The river term may be too strong.** `heuristic-2` scores the 3-day peak
+  against the 92-day median. During a long rainy season the median lags, so
+  the river term stays near its maximum for weeks. Compare the peak with a
+  seasonal baseline (the same weeks in earlier years), or with return-period
+  thresholds such as GloFAS's 2-, 5- and 20-year flows.
+- **Rainfall and soil terms should need an unusual day,** not just a wet
+  week: compare with the local climatology for that time of year.
+- **Make the warning level depend on the place.** The basins that flood
+  every year need a higher bar than places where flooding is rare.
+
 ### Next steps
 
-1. **Add wet non-flood days.** Use days in March–May 2024 at the same places
-   when no flooding was reported, for example a week before or after each
-   event. This is the comparison that tests whether the score separates
-   flood days from rainy days. Without it, weights can't be tuned.
+1. ~~**Add wet non-flood days.**~~ Done (above). The score doesn't yet
+   separate them from flood days. Check a sample of these controls against
+   Kenya Red Cross and county situation reports, so real but unreported floods
+   are relabelled.
 2. **More Kisumu and Budalang'i events** from Kenya Red Cross and county
    reports, and the 2023 short rains (October–December).
 3. **Score real forecasts.** Open-Meteo's Historical Forecast API keeps past

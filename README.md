@@ -52,10 +52,11 @@ More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 | Issue | Status | Plan |
 |---|---|---|
-| [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | Open: release gate | [docs/RISK_DATA_SOURCES.md](docs/RISK_DATA_SOURCES.md): real elevation and river discharge (#57), then a backtest against past floods (#58) |
+| [#22 Calibrate the risk score](https://github.com/iochieng1/Aura-Risk/issues/22) | Open: release gate | [docs/RISK_DATA_SOURCES.md](docs/RISK_DATA_SOURCES.md) and [docs/BACKTEST.md](docs/BACKTEST.md): real elevation and river discharge (#57) and backtests done; static layers, more events and tuning remain |
+| [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | Open: release gate | [docs/RELEASE.md](docs/RELEASE.md): immutable images, HTTPS proxy, runbooks and a rehearsed restore drill are done; a drill on a production backup remains |
 | [#18 PostGIS spatial queries](https://github.com/iochieng1/Aura-Risk/issues/18) | Done | True radius search with `ST_DWithin` and GiST indexes (migration 007) |
-| [#27 Production deployment](https://github.com/iochieng1/Aura-Risk/issues/27) | Open: release gate | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): free demo on Render now (`render.yaml`); AWS or DigitalOcean for a real launch |
-| [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | Mostly done | CI runs on every PR; remaining: require it to pass before merging, and database-failure tests |
+| [#26 Tests and CI](https://github.com/iochieng1/Aura-Risk/issues/26) | Done | Required on every PR; database-failure tests |
+| [#60 Swahili](https://github.com/iochieng1/Aura-Risk/issues/60), [#61 SMS/USSD](https://github.com/iochieng1/Aura-Risk/issues/61), [#62 county responders](https://github.com/iochieng1/Aura-Risk/issues/62), [#63 county dashboard](https://github.com/iochieng1/Aura-Risk/issues/63) | Done | [I18N.md](docs/I18N.md), [SMS_USSD.md](docs/SMS_USSD.md), [COUNTY_RESPONSE.md](docs/COUNTY_RESPONSE.md), [OPEN_DATA.md](docs/OPEN_DATA.md) |
 
 How these depend on each other, plus untracked work and the recommended order: [docs/ROADMAP.md](docs/ROADMAP.md).
 
