@@ -129,6 +129,7 @@ Build for production with `npm run build`.
 - `POST /api/reports`: creates a community report. Optional `county` (any of Kenya's 47 counties; case, a trailing "County" and spaces or hyphens are ignored, and the official name is stored) and `ward` (free text, up to 100 bytes, needs a county). Reports return both when set.
 - `/api/responder/reports`: county responders list, acknowledge and resolve their county's verified reports. Reports carry a public `response_status` (`open`, `acknowledged`, `resolved`), and verified reports can be sent to a per-county webhook. See [COUNTY_RESPONSE.md](COUNTY_RESPONSE.md).
 - `GET /api/stats/counties` and `GET /api/open-data/reports.csv` / `.json`: public county response statistics and an anonymised CC BY 4.0 export of verified reports. See [OPEN_DATA.md](OPEN_DATA.md).
+- `POST /api/channels/ussd` and `POST /api/channels/sms`: Africa's Talking callbacks for checking risk and reporting from feature phones. Disabled unless `CHANNEL_CALLBACK_SECRET` is set. See [SMS_USSD.md](SMS_USSD.md).
 
 The report endpoint expects `location`, `category`, and `note`. Valid categories are `flooding`, `road_blocked`, `water_rising`, and `drainage_issue`.
 

@@ -6,7 +6,9 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/aurarisk-backend .
+# The commit SHA; /health reports it so you can see which build is running.
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/aurarisk-backend .
 
 # distroless/static has CA certificates (for Open-Meteo, Postgres TLS, S3)
 # and runs as a non-root user.

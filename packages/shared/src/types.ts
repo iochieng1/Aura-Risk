@@ -99,6 +99,8 @@ export interface CommunityReport {
   response_status?: ResponseStatus;
   /** RFC 3339: when the response status last changed. Absent while open. */
   response_updated_at?: string;
+  /** True for SMS and USSD reports, which are placed at the county headquarters. */
+  location_approximate?: boolean;
 }
 
 /** One county's row in GET /api/stats/counties (verified reports created in the period). */

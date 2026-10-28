@@ -25,6 +25,9 @@ import (
 
 const maxJSONBodyBytes = 64 << 10
 
+// version is the build's commit SHA, set with -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	migrateOnly := len(os.Args) == 2 && os.Args[1] == "migrate"
 	if len(os.Args) > 1 && !migrateOnly {
@@ -78,6 +81,7 @@ func main() {
 	}
 
 	handlers.SetDatabase(db)
+	handlers.SetVersion(version)
 
 	staleFor := config.GetDuration("WEATHER_STALE_MAX", 3*time.Hour)
 	if staleFor == 0 {
@@ -294,6 +298,33 @@ func main() {
 		}
 	}
 
+	// Africa's Talking SMS and USSD callbacks (#61). They are outside the
+	// per-IP limit because every request comes from Africa's Talking; they
+	// are limited per phone instead.
+	if secret := config.GetEnv("CHANNEL_CALLBACK_SECRET", ""); secret != "" {
+		cfg := &handlers.ChannelConfig{
+			CallbackSecret: secret,
+			PhoneSalt:      config.GetEnv("CHANNEL_PHONE_SALT", ""),
+			PerMinute:      config.GetInt("CHANNEL_RATE_LIMIT_PER_MINUTE", 10),
+			ReportsPerHour: config.GetInt("CHANNEL_REPORTS_PER_HOUR", 5),
+		}
+		if key := config.GetEnv("AT_API_KEY", ""); key != "" {
+			smsURL := services.AfricasTalkingSMSURL
+			if config.GetBool("AT_SANDBOX", false) {
+				smsURL = services.AfricasTalkingSandboxSMSURL
+			}
+			cfg.SMS = &services.AfricasTalkingSMS{
+				URL: smsURL, Username: config.GetEnv("AT_USERNAME", ""), APIKey: key, From: config.GetEnv("AT_SMS_FROM", ""),
+			}
+		} else {
+			log.Println("⚠️ AT_API_KEY is not set: SMS replies are logged, not sent")
+		}
+		handlers.SetChannels(cfg)
+		r.POST("/api/channels/ussd", handlers.USSDCallback)
+		r.POST("/api/channels/sms", handlers.SMSCallback)
+		log.Println("✅ SMS and USSD callbacks enabled")
+	}
+
 	port := config.GetEnv("PORT", "8080")
 	server := &http.Server{
 		Addr:              ":" + port,
@@ -307,7 +338,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("🚀 AuraRisk backend running on port %s", port)
+		log.Printf("🚀 AuraRisk backend %s running on port %s", version, port)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Server failed: %v", err)
 		}

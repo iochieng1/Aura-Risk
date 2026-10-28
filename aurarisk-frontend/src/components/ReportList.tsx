@@ -42,7 +42,8 @@ export default function ReportList({ reports }: { reports: CommunityReport[] }) 
               <p className="text-[10px] text-gray-400 mt-0.5 truncate">
                 {r.location.name}
                 {r.ward ? ` · ${r.ward}` : ""}
-                {r.county ? ` · ${r.county}` : ""} · {timeAgo(r.timestamp, t)} ·{" "}
+                {r.county ? ` · ${r.county}` : ""}
+                {r.location_approximate ? ` (${t("report.approximate")})` : ""} · {timeAgo(r.timestamp, t)} ·{" "}
                 <span
                   className={
                     r.status === "verified" ? "text-green-700 font-medium" : undefined

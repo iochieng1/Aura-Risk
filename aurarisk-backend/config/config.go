@@ -96,6 +96,13 @@ func Validate() error {
 		problems = append(problems, err.Error())
 	}
 
+	if GetEnv("CHANNEL_CALLBACK_SECRET", "") != "" && GetEnv("CHANNEL_PHONE_SALT", "") == "" {
+		problems = append(problems, "CHANNEL_PHONE_SALT is required while CHANNEL_CALLBACK_SECRET is set")
+	}
+	if (GetEnv("AT_API_KEY", "") == "") != (GetEnv("AT_USERNAME", "") == "") {
+		problems = append(problems, "AT_USERNAME and AT_API_KEY must be set together")
+	}
+
 	if err := logging.CheckFormat(LogFormat()); err != nil {
 		problems = append(problems, err.Error())
 	}
@@ -113,6 +120,14 @@ func Validate() error {
 		}
 		if len(webhooks) > 0 && len(GetEnv("COUNTY_WEBHOOK_SECRET", "")) < minModeratorTokenLength {
 			problems = append(problems, fmt.Sprintf("COUNTY_WEBHOOK_SECRET must be at least %d characters while COUNTY_WEBHOOKS is set", minModeratorTokenLength))
+		}
+		if secret := GetEnv("CHANNEL_CALLBACK_SECRET", ""); secret != "" {
+			if len(secret) < minModeratorTokenLength {
+				problems = append(problems, fmt.Sprintf("CHANNEL_CALLBACK_SECRET must be at least %d characters", minModeratorTokenLength))
+			}
+			if len(GetEnv("CHANNEL_PHONE_SALT", "")) < minModeratorTokenLength {
+				problems = append(problems, fmt.Sprintf("CHANNEL_PHONE_SALT must be at least %d characters while SMS/USSD is enabled", minModeratorTokenLength))
+			}
 		}
 		if dsn != "" && isDevSecret(dsnPassword(dsn)) {
 			problems = append(problems, "DATABASE_URL uses a development password")
