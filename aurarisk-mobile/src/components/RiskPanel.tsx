@@ -1,20 +1,19 @@
 import {
+  categoryLabel,
   type CommunityReport,
-  DECISION_SUPPORT_NOTICE,
   describeFreshness,
   type Location,
-  REPORT_CATEGORIES,
   reportStatusLabel,
   RISK_LEVEL_COLORS,
+  riskLevelLabel,
   WEATHER_ATTRIBUTION,
 } from '@aurarisk/shared';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
+import { useT } from '../i18n';
 import { fetchNearbyReports, fetchRiskAssessment, RiskFetchResult } from '../services/api';
 
 const MAX_REPORTS_SHOWN = 5;
-
-const categoryLabel = (value: string) => REPORT_CATEGORIES.find((c) => c.value === value)?.label ?? value;
 
 interface Props {
   location: Location;
@@ -27,6 +26,7 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
   const [risk, setRisk] = useState<RiskFetchResult | null>(null);
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const { lang, t } = useT();
 
   useEffect(() => {
     let cancelled = false;
@@ -42,25 +42,25 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [location.lat, location.lon, refreshKey]);
+  }, [location.lat, location.lon, refreshKey, lang]); // lang: refetch so the summary and tips follow it
 
-  if (loading) return <ActivityIndicator accessibilityLabel="Loading flood risk" />;
+  if (loading) return <ActivityIndicator accessibilityLabel={t('mobile.loadingRisk')} />;
 
   const data = risk?.data;
-  const freshness = data ? describeFreshness(data) : null;
+  const freshness = data ? describeFreshness(data, Date.now(), lang) : null;
   return (
     <View style={styles.section}>
-      <Text style={styles.heading}>Flood risk</Text>
+      <Text style={styles.heading}>{t('mobile.floodRisk')}</Text>
       {risk?.isOffline && (
         <Text style={styles.banner}>
-          {data ? `Offline — showing saved data${risk.isStale ? ' older than a day' : ''}.` : 'Offline and no saved data for this place.'}
+          {data ? t(risk.isStale ? 'mobile.offlineSavedOld' : 'mobile.offlineSaved') : t('mobile.offlineNoData')}
         </Text>
       )}
       {data ? (
         <View style={[styles.card, { borderLeftColor: RISK_LEVEL_COLORS[data.level] }]}>
           <View style={styles.levelRow}>
-            <Text style={[styles.level, { color: RISK_LEVEL_COLORS[data.level] }]}>{data.level}</Text>
-            <Text style={styles.meta}>Score {data.score}/100</Text>
+            <Text style={[styles.level, { color: RISK_LEVEL_COLORS[data.level] }]}>{riskLevelLabel(lang, data.level)}</Text>
+            <Text style={styles.meta}>{t('mobile.score', { score: data.score })}</Text>
           </View>
           <Text style={styles.body}>{data.summary}</Text>
           {data.tips.map((tip) => (
@@ -71,7 +71,7 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
           {freshness && (
             <Text style={freshness.outdated ? styles.outdated : styles.meta}>
               {freshness.label}
-              {freshness.outdated ? '. Conditions may have changed.' : ''}
+              {freshness.outdated ? `. ${t('freshness.mayHaveChanged')}` : ''}
             </Text>
           )}
           <Text
@@ -79,23 +79,23 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
             accessibilityRole="link"
             onPress={() => Linking.openURL(WEATHER_ATTRIBUTION.url)}
           >
-            {WEATHER_ATTRIBUTION.label} ({WEATHER_ATTRIBUTION.licence})
+            {t('weather.attribution')} ({WEATHER_ATTRIBUTION.licence})
           </Text>
         </View>
       ) : (
-        !risk?.isOffline && <Text style={styles.error}>Could not load flood risk for this place.</Text>
+        !risk?.isOffline && <Text style={styles.error}>{t('mobile.riskFailed')}</Text>
       )}
 
       <Text style={styles.notice} accessibilityRole="text">
-        {DECISION_SUPPORT_NOTICE}
+        {t('notice.decisionSupport')}
       </Text>
 
-      <Text style={styles.subheading}>Nearby reports ({reports.length})</Text>
-      {reports.length === 0 && <Text style={styles.meta}>No community reports within 10 km.</Text>}
+      <Text style={styles.subheading}>{t('mobile.nearbyReports', { count: reports.length })}</Text>
+      {reports.length === 0 && <Text style={styles.meta}>{t('mobile.noNearby')}</Text>}
       {reports.slice(0, MAX_REPORTS_SHOWN).map((r) => (
         <View key={r.id} style={styles.report}>
           <Text style={styles.reportTitle}>
-            {categoryLabel(r.category)} · {new Date(r.timestamp).toLocaleString()}
+            {categoryLabel(lang, r.category)} · {new Date(r.timestamp).toLocaleString(lang)}
           </Text>
           <Text style={styles.body} numberOfLines={3}>
             {r.note}
@@ -103,7 +103,7 @@ export default function RiskPanel({ location, refreshKey = 0 }: Props) {
           <Text style={styles.meta}>
             {[r.ward, r.county].filter(Boolean).join(', ')}
             {r.ward || r.county ? ' · ' : ''}
-            {reportStatusLabel(r)}
+            {reportStatusLabel(r, lang)}
           </Text>
         </View>
       ))}

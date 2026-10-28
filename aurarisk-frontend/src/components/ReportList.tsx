@@ -1,5 +1,6 @@
 import { reportStatusLabel } from "@aurarisk/shared";
 import type { CommunityReport } from "../types";
+import { useT } from "../i18n";
 
 const ICONS: Record<string, string> = {
   flooding: "🌊",
@@ -8,25 +9,26 @@ const ICONS: Record<string, string> = {
   drainage_issue: "🕳️",
 };
 
-function timeAgo(ts: string): string {
+function timeAgo(ts: string, t: ReturnType<typeof useT>["t"]): string {
   const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
-  if (diff < 1) return "just now";
-  if (diff < 60) return `${diff}m ago`;
-  if (diff < 48 * 60) return `${Math.floor(diff / 60)}h ago`;
-  return `${Math.floor(diff / (24 * 60))}d ago`;
+  if (diff < 1) return t("age.justNow");
+  if (diff < 60) return t("time.minutesAgo", { n: diff });
+  if (diff < 48 * 60) return t("time.hoursAgo", { n: Math.floor(diff / 60) });
+  return t("time.daysAgo", { n: Math.floor(diff / (24 * 60)) });
 }
 
 export default function ReportList({ reports }: { reports: CommunityReport[] }) {
+  const { lang, t } = useT();
   if (!reports.length) {
     return (
-      <p className="text-xs text-gray-400 italic">No reports in this area yet.</p>
+      <p className="text-xs text-gray-400 italic">{t("web.noReports")}</p>
     );
   }
 
   return (
     <div>
       <h3 className="text-sm font-semibold text-gray-700 mb-2">
-        Community Reports ({reports.length})
+        {t("web.communityReports", { count: reports.length })}
       </h3>
       <ul className="space-y-2">
         {reports.map((r) => (
@@ -40,13 +42,13 @@ export default function ReportList({ reports }: { reports: CommunityReport[] }) 
               <p className="text-[10px] text-gray-400 mt-0.5 truncate">
                 {r.location.name}
                 {r.ward ? ` · ${r.ward}` : ""}
-                {r.county ? ` · ${r.county}` : ""} · {timeAgo(r.timestamp)} ·{" "}
+                {r.county ? ` · ${r.county}` : ""} · {timeAgo(r.timestamp, t)} ·{" "}
                 <span
                   className={
                     r.status === "verified" ? "text-green-700 font-medium" : undefined
                   }
                 >
-                  {reportStatusLabel(r)}
+                  {reportStatusLabel(r, lang)}
                 </span>
               </p>
             </div>

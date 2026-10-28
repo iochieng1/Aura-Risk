@@ -10,9 +10,20 @@ import NotificationSettings from './src/components/NotificationSettings';
 import ReportComposer from './src/components/ReportComposer';
 import { useOfflineSync } from './src/hooks/useOfflineSync';
 import { setupNotifications } from './src/notifications/setup';
+import LanguageToggle from './src/components/LanguageToggle';
 import RiskPanel from './src/components/RiskPanel';
+import { I18nProvider, useT } from './src/i18n';
 
 export default function App() {
+  return (
+    <I18nProvider>
+      <Main />
+    </I18nProvider>
+  );
+}
+
+function Main() {
+  const { t } = useT();
   const { pendingCount, isSyncing, refreshPendingCount } = useOfflineSync();
   const [location, setLocation] = useState<Location | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -32,9 +43,10 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <LanguageToggle />
           {(pendingCount > 0 || isSyncing) && (
             <Text style={styles.banner}>
-              {isSyncing ? 'Sending queued reports…' : `${pendingCount} report(s) waiting to be sent`}
+              {isSyncing ? t('mobile.sendingQueued') : t('mobile.waiting', { count: pendingCount })}
             </Text>
           )}
           <LocationPicker value={location} onChange={setLocation} />

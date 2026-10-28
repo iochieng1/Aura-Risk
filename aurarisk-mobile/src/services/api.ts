@@ -1,6 +1,7 @@
 import { ApiError, createApiClient, type FieldErrors, validateNewReport, ValidationError } from '@aurarisk/shared';
 import NetInfo from '@react-native-community/netinfo';
 import { authFetch } from '../auth/authClient';
+import { getLang } from '../i18n';
 import { API_BASE_URL, fetchWithTimeout } from '../config';
 import { uploadReportPhotos } from '../photos/upload';
 import { RiskData, CommunityReport } from '../types/api';
@@ -8,7 +9,7 @@ import { saveRiskToCache, getCachedRisk, saveReportsToCache, getCachedReports } 
 import { enqueueReport, NewReport, QueuedReport } from '../storage/reportQueue';
 
 /** Unauthenticated endpoints (risk, nearby reports). */
-export const publicApi = createApiClient({ baseUrl: API_BASE_URL, fetch: fetchWithTimeout });
+export const publicApi = createApiClient({ baseUrl: API_BASE_URL, fetch: fetchWithTimeout, lang: getLang });
 
 // authFetch prefixes API_BASE_URL itself and handles token refresh, so this client sends bare paths.
 const deviceApi = createApiClient({ baseUrl: '', fetch: authFetch });

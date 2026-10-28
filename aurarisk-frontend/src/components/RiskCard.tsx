@@ -3,19 +3,19 @@ import type { RiskAssessment } from "../types";
 import StatusBadge from "./StatusBadge";
 import { RISK_CONFIG } from "../utils/risk";
 import { useNow } from "../hooks/useNow";
-
-const CONFIDENCE_LABEL = { low: "Low", medium: "Medium", high: "High" } as const;
+import { useT } from "../i18n";
 
 export default function RiskCard({ risk }: { risk: RiskAssessment }) {
   const c = RISK_CONFIG[risk.level];
   const now = useNow();
-  const freshness = describeFreshness(risk, now);
+  const { lang, t } = useT();
+  const freshness = describeFreshness(risk, now, lang);
   const fetchedAt = risk.source_timestamps?.weather_fetched_at;
 
   return (
     <section className={`rounded-xl border p-4 ${c.bg} ${c.border}`}>
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold text-gray-700">Flood Risk</h2>
+        <h2 className="text-sm font-semibold text-gray-700">{t("web.floodRisk")}</h2>
         <StatusBadge level={risk.level} />
       </div>
 
@@ -40,14 +40,14 @@ export default function RiskCard({ risk }: { risk: RiskAssessment }) {
           ) : (
             freshness.label
           )}
-          {freshness.outdated && ". Conditions may have changed."}
+          {freshness.outdated && `. ${t("freshness.mayHaveChanged")}`}
         </p>
       )}
 
       {risk.confidence && (
         <details className="mt-2 text-xs text-gray-600">
           <summary className="cursor-pointer">
-            Confidence: {CONFIDENCE_LABEL[risk.confidence.level] ?? risk.confidence.level}
+            {t("web.confidence", { level: t(`confidence.${risk.confidence.level}`) })}
           </summary>
           {risk.confidence.reasons.length > 0 && (
             <ul className="mt-1 ml-4 list-disc space-y-0.5">
@@ -61,7 +61,7 @@ export default function RiskCard({ risk }: { risk: RiskAssessment }) {
 
       <p className="mt-3 text-[11px] text-gray-600">
         <a href={WEATHER_ATTRIBUTION.url} target="_blank" rel="noreferrer" className="underline">
-          {WEATHER_ATTRIBUTION.label}
+          {t("weather.attribution")}
         </a>{" "}
         (
         <a href={WEATHER_ATTRIBUTION.licenceUrl} target="_blank" rel="noreferrer" className="underline">

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { DECISION_SUPPORT_NOTICE } from "@aurarisk/shared";
+import { translate, type MessageKey, type MessageParams } from "@aurarisk/shared";
 import type { Location, RiskAssessment, CommunityReport, NewReportDetails } from "./types";
 import { fetchRisk, fetchReports, submitReport } from "./api/risk";
 import { describeError } from "./api/errors";
@@ -10,6 +10,10 @@ import MapListAlternative, { MAP_LIST_ID } from "./components/MapListAlternative
 import CountyDashboard from "./components/CountyDashboard";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
 import { useHashView } from "./hooks/useHashView";
+import { getLang, useT } from "./i18n";
+
+// For callbacks that must not change when the language does.
+const tr = (key: MessageKey, params?: MessageParams) => translate(getLang(), key, params);
 
 // Kisumu, Kenya: the first pilot area (#56). VITE_DEFAULT_CENTER ("lat,lon")
 // moves the map elsewhere without a code change.
@@ -38,6 +42,7 @@ export default function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const online = useOnlineStatus();
   const view = useHashView();
+  const { lang, t } = useT();
   const menuButton = useRef<HTMLButtonElement>(null);
   // Only the latest selection may update state; slower earlier requests are ignored.
   const latestRequest = useRef(0);
@@ -66,15 +71,15 @@ export default function App() {
     else console.error("Failed to load reports", reportsResult.reason);
     setReportsFailed(reportsResult.status === "rejected");
 
-    const riskError = riskResult.status === "rejected" ? describeError(riskResult.reason) : null;
-    const reportsError = reportsResult.status === "rejected" ? describeError(reportsResult.reason) : null;
+    const riskError = riskResult.status === "rejected" ? describeError(riskResult.reason, getLang()) : null;
+    const reportsError = reportsResult.status === "rejected" ? describeError(reportsResult.reason, getLang()) : null;
     if (riskError && reportsError && riskError === reportsError) {
-      setLoadError(`Couldn't load flood risk or reports. ${riskError}`);
+      setLoadError(tr("error.riskAndReports", { reason: riskError }));
     } else {
       setLoadError(
         [
-          riskError && `Flood risk is unavailable. ${riskError}`,
-          reportsError && `Community reports are unavailable. ${reportsError}`,
+          riskError && tr("error.riskUnavailable", { reason: riskError }),
+          reportsError && tr("error.reportsUnavailable", { reason: reportsError }),
         ]
           .filter(Boolean)
           .join(" ") || null
@@ -87,6 +92,14 @@ export default function App() {
     if (selectedLocation) loadLocation(selectedLocation);
   }, [selectedLocation, loadLocation]);
 
+  // Reload the place when the language changes, so its summary and tips follow.
+  const loadedLang = useRef(lang);
+  useEffect(() => {
+    if (loadedLang.current === lang) return;
+    loadedLang.current = lang;
+    if (selectedLocation) loadLocation(selectedLocation);
+  }, [lang, selectedLocation, loadLocation]);
+
   // Reload a failed location once the connection comes back.
   const wasOnline = useRef(online);
   useEffect(() => {
@@ -96,7 +109,7 @@ export default function App() {
 
   const handleLocate = useCallback(() => {
     if (!navigator.geolocation) {
-      setNotice("This browser can't share your location. Search for a place instead.");
+      setNotice(tr("web.noGeolocation"));
       setSidebarOpen(true);
       return;
     }
@@ -106,7 +119,7 @@ export default function App() {
       (pos) => {
         setLocating(false);
         const loc: Location = {
-          name: "My Location",
+          name: tr("web.myLocationName"),
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
         };
@@ -117,8 +130,8 @@ export default function App() {
         setLocating(false);
         setNotice(
           err.code === err.PERMISSION_DENIED
-            ? "Location access is blocked. Allow it in your browser settings, or search for a place instead."
-            : "Couldn't find your location. Try again, or search for a place instead."
+            ? tr("web.locationBlocked")
+            : tr("web.locationFailed")
         );
         // On small screens the message is in the drawer, so open it.
         setSidebarOpen(true);
@@ -135,13 +148,13 @@ export default function App() {
   // Throws a user-facing message so the form can keep the note and show it.
   const handleSubmitReport = useCallback(
     async (details: NewReportDetails) => {
-      if (!selectedLocation) throw new Error("Choose a location first.");
+      if (!selectedLocation) throw new Error(tr("error.chooseLocationFirst"));
       let newReport: CommunityReport;
       try {
         newReport = await submitReport(selectedLocation, details);
       } catch (err) {
         console.error("Failed to submit report", err);
-        throw new Error(describeError(err));
+        throw new Error(describeError(err, getLang()));
       }
       // A duplicate is stored but not listed, so don't show it twice.
       if (!newReport.duplicate_of) setReports((prev) => [newReport, ...prev]);
@@ -157,7 +170,7 @@ export default function App() {
           href={`#${MAP_LIST_ID}`}
           className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:px-3 focus:py-2 focus:bg-white focus:text-blue-700 focus:rounded-lg focus:shadow"
         >
-          Skip to map contents as a list
+          {t("web.skipToList")}
         </a>
       )}
       <Header
@@ -194,7 +207,7 @@ export default function App() {
         </div>
       )}
       <footer className="px-4 py-2 text-[11px] leading-snug text-gray-700 bg-amber-50 border-t border-amber-200">
-        <strong>Decision support only.</strong> {DECISION_SUPPORT_NOTICE}
+        <strong>{t("notice.decisionSupportTitle")}</strong> {t("notice.decisionSupport")}
       </footer>
     </div>
   );

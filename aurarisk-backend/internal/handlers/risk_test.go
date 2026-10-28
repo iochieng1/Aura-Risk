@@ -55,6 +55,42 @@ func TestPostRiskWithWeather(t *testing.T) {
 	}
 }
 
+func TestRiskLanguage(t *testing.T) {
+	body := fmt.Sprintf(`{"lat":-0.07,"lon":34.77,"weather":%s}`, weatherJSON(-0.1, 34.8))
+	send := func(path, acceptLanguage string) (*httptest.ResponseRecorder, string, []string) {
+		t.Helper()
+		r := newRouter()
+		r.POST("/api/risk", PostRiskWithWeather)
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if acceptLanguage != "" {
+			req.Header.Set("Accept-Language", acceptLanguage)
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		var risk struct {
+			Summary string
+			Tips    []string
+		}
+		json.Unmarshal(w.Body.Bytes(), &risk)
+		return w, risk.Summary, risk.Tips
+	}
+
+	for _, c := range []struct{ path, accept, want, prefix string }{
+		{"/api/risk", "", "en", "Flood risk for"},
+		{"/api/risk?lang=sw", "", "sw", "Hatari ya mafuriko kwa"},
+		{"/api/risk", "sw-KE,en;q=0.5", "sw", "Hatari ya mafuriko kwa"},
+		{"/api/risk?lang=en", "sw", "en", "Flood risk for"},
+	} {
+		w, summary, tips := send(c.path, c.accept)
+		if w.Code != http.StatusOK || w.Header().Get("Content-Language") != c.want ||
+			w.Header().Get("Vary") != "Accept-Language" || !strings.HasPrefix(summary, c.prefix) || len(tips) == 0 {
+			t.Errorf("%s (Accept-Language %q): %d, Content-Language %q, summary %q", c.path, c.accept, w.Code,
+				w.Header().Get("Content-Language"), summary)
+		}
+	}
+}
+
 func TestPostRiskWithWeatherRejectsBadInput(t *testing.T) {
 	cases := map[string]string{
 		"missing lat":    `{"lon":34.77,"weather":` + weatherJSON(0, 34.8) + `}`,

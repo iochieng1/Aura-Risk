@@ -96,6 +96,19 @@ describe('createApiClient', () => {
       ]);
     });
 
+    it('keeps the language on the fallback', async () => {
+      const fetch = jest.fn(async (url: string) => {
+        if (url.startsWith('https://api.open-meteo.com/')) return json(weather);
+        return url.includes('/api/risk?lang=') ? json(risk) : unavailable();
+      });
+      const client = createApiClient({ baseUrl: 'http://api.test', fetch, lang: () => 'sw' });
+
+      await client.getRisk({ lat: -0.07, lon: 34.77 });
+
+      expect(fetch.mock.calls[0][0]).toBe('http://api.test/api/risk?lat=-0.07&lon=34.77&lang=sw');
+      expect(fetch.mock.calls[2][0]).toBe('http://api.test/api/risk?lang=sw');
+    });
+
     it('throws the server error when the device cannot get weather either', async () => {
       const fetch = jest.fn(async (url: string) =>
         url.startsWith('https://api.open-meteo.com/') ? json({ reason: 'limit' }, 429) : unavailable()

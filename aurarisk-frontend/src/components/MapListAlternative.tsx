@@ -1,5 +1,6 @@
-import { REPORT_CATEGORIES } from "@aurarisk/shared";
+import { categoryLabel, reportStatusLabel, riskLevelLabel } from "@aurarisk/shared";
 import type { CommunityReport, Location, RiskAssessment } from "../types";
+import { useT } from "../i18n";
 
 export const MAP_LIST_ID = "map-contents";
 
@@ -9,39 +10,42 @@ interface Props {
   reports: CommunityReport[];
 }
 
-const categoryLabel = (value: string) => REPORT_CATEGORIES.find((c) => c.value === value)?.label ?? value;
-
 /**
  * What the map shows, as a list, for screen-reader users who can't use the
  * map canvas. Visually hidden; reached from the skip link at the top.
  */
 export default function MapListAlternative({ location, risk, reports }: Props) {
+  const { lang, t } = useT();
   return (
-    <section id={MAP_LIST_ID} tabIndex={-1} aria-label="Map contents as a list" className="sr-only focus:not-sr-only">
-      <h2>Map contents</h2>
+    <section id={MAP_LIST_ID} tabIndex={-1} aria-label={t("web.mapList")} className="sr-only focus:not-sr-only">
+      <h2>{t("web.mapContents")}</h2>
       {!location ? (
-        <p>No location selected. Search for a place to show it on the map.</p>
+        <p>{t("web.mapNoLocation")}</p>
       ) : (
         <>
           <p>
-            Map centered on {location.name}.
-            {risk && ` Flood risk there is ${risk.level}, score ${risk.score} out of 100.`}
+            {t("web.mapCentered", { place: location.name })}
+            {risk && ` ${t("web.mapRisk", { level: riskLevelLabel(lang, risk.level), score: risk.score })}`}
           </p>
           {reports.length === 0 ? (
-            <p>No community reports are marked on the map.</p>
+            <p>{t("web.mapNoReports")}</p>
           ) : (
             <>
               <p>
                 {reports.length === 1
-                  ? "1 community report is marked on the map:"
-                  : `${reports.length} community reports are marked on the map:`}
+                  ? t("web.mapOneReport")
+                  : t("web.mapReports", { count: reports.length })}
               </p>
               <ul>
                 {reports.map((r) => (
                   <li key={r.id}>
-                    {categoryLabel(r.category)} at {r.location.name}, reported{" "}
-                    {new Date(r.timestamp).toLocaleString()}
-                    {r.status === "verified" ? ", verified" : ", unverified"}: {r.note}
+                    {t("web.mapReportItem", {
+                      category: categoryLabel(lang, r.category),
+                      place: r.location.name,
+                      time: new Date(r.timestamp).toLocaleString(lang),
+                      status: reportStatusLabel(r, lang),
+                      note: r.note,
+                    })}
                   </li>
                 ))}
               </ul>

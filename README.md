@@ -123,6 +123,7 @@ Expected response:
 - Device accounts, push consent, location subscriptions, and photo uploads — see [docs/MOBILE_PHASE3.md](docs/MOBILE_PHASE3.md)
 - Risk model data sources and calibration plan — see [docs/RISK_DATA_SOURCES.md](docs/RISK_DATA_SOURCES.md)
 - Production hosting options and deployment checklist — see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- English and Swahili, and how to add a language — see [docs/I18N.md](docs/I18N.md)
 
 ### Monitoring and on-call
 

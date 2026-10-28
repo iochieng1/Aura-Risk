@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type FormEvent } from "react";
 import type { Location } from "../types";
 import { MIN_PLACE_QUERY_LENGTH } from "@aurarisk/shared";
 import { searchLocations } from "../api/nominatim";
+import { useT } from "../i18n";
 
 interface Props {
   onSelect: (loc: Location) => void;
@@ -19,6 +20,7 @@ export default function SearchBar({ onSelect, online }: Props) {
   const [searched, setSearched] = useState("");
   const searchSeq = useRef(0);
   const wrapper = useRef<HTMLDivElement>(null);
+  const { t } = useT();
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -65,8 +67,8 @@ export default function SearchBar({ onSelect, online }: Props) {
           type="search"
           value={query}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder="Search a location…"
-          aria-label="Search a location"
+          placeholder={t("web.searchPlaceholder")}
+          aria-label={t("web.searchLabel")}
           className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
         />
         <button
@@ -74,14 +76,14 @@ export default function SearchBar({ onSelect, online }: Props) {
           disabled={tooShort || searching || !online}
           className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
         >
-          {searching ? "Searching…" : "Search"}
+          {searching ? t("ui.searching") : t("ui.search")}
         </button>
       </form>
       {open && (
         <div className="absolute z-30 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
           {results.length === 0 ? (
             <p className="px-3 py-2 text-sm text-gray-600" role="status">
-              No matches for “{searched}”. Try a nearby town.
+              {t("web.noMatches", { query: searched })}
             </p>
           ) : (
             <ul className="max-h-60 overflow-y-auto">
@@ -101,7 +103,7 @@ export default function SearchBar({ onSelect, online }: Props) {
           <p className="px-3 py-1 text-[11px] text-gray-500 border-t border-gray-100">
             Search ©{" "}
             <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">
-              OpenStreetMap contributors
+              {t("ui.osmContributors")}
             </a>
           </p>
         </div>
