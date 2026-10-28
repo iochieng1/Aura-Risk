@@ -145,6 +145,8 @@ Every error has the same JSON shape:
 
 Bodies over 64 KiB get 413. Each client IP gets `RATE_LIMIT_PER_MINUTE` (120) requests per minute across `/api`. Creating reports, registering devices, and starting photo uploads also count against `RATE_LIMIT_WRITES_PER_MINUTE` (20). Over the limit the API returns 429 with `Retry-After`. Limits are per instance and in memory. Behind a proxy, set `TRUSTED_PROXIES`, or every client shares the proxy's IP.
 
+When Postgres is down or too slow, requests answer **503** with `Retry-After` rather than 500 or hanging: each `/api` request has a `REQUEST_TIMEOUT` deadline (25 s) that every database call honours, and new connections give up after `DB_CONNECT_TIMEOUT` seconds (5). Tests cover every database-backed route against a refused and a hanging database.
+
 ## Production readiness assessment
 
 ### Current status

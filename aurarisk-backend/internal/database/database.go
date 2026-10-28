@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -21,7 +22,7 @@ func Connect() *sql.DB {
 		log.Fatal("DATABASE_URL is not set")
 	}
 
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("postgres", WithConnectTimeout(dsn, os.Getenv("DB_CONNECT_TIMEOUT")))
 	if err != nil {
 		log.Fatalf("Failed to open database connection: %v", err)
 	}
@@ -41,6 +42,30 @@ func Connect() *sql.DB {
 
 	log.Println("✅ Database connected")
 	return db
+}
+
+// WithConnectTimeout adds connect_timeout (seconds, default 5) to a DSN that
+// doesn't set one. lib/pq ignores the request context while connecting, so
+// without it a database that accepts connections but never answers would
+// hang requests until the server's write timeout.
+func WithConnectTimeout(dsn, seconds string) string {
+	if seconds == "" {
+		seconds = "5"
+	}
+	if strings.Contains(dsn, "connect_timeout") {
+		return dsn
+	}
+	if strings.HasPrefix(dsn, "postgres://") || strings.HasPrefix(dsn, "postgresql://") {
+		u, err := url.Parse(dsn)
+		if err != nil {
+			return dsn
+		}
+		q := u.Query()
+		q.Set("connect_timeout", seconds)
+		u.RawQuery = q.Encode()
+		return u.String()
+	}
+	return strings.TrimSpace(dsn) + " connect_timeout=" + seconds
 }
 
 // migrationLockID is an arbitrary constant identifying the migration lock.

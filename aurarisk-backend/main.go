@@ -246,7 +246,9 @@ func main() {
 	apiLimit := handlers.NewRateLimiter("api", config.GetInt("RATE_LIMIT_PER_MINUTE", 120)).Middleware()
 	writeLimit := handlers.NewRateLimiter("writes", config.GetInt("RATE_LIMIT_WRITES_PER_MINUTE", 20)).Middleware()
 
-	api := r.Group("/api", apiLimit)
+	// Below the server's 60 s write timeout, so slow requests get a clean 503.
+	requestTimeout := handlers.RequestTimeout(config.GetDuration("REQUEST_TIMEOUT", 25*time.Second))
+	api := r.Group("/api", apiLimit, requestTimeout)
 	{
 		api.GET("/risk", handlers.GetRisk)
 		api.POST("/risk", handlers.PostRiskWithWeather)

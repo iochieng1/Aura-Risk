@@ -88,7 +88,7 @@ func scanSubscription(row rowScanner) (*models.Subscription, error) {
 }
 
 func ListSubscriptions(c *gin.Context) {
-	rows, err := db.Query(`SELECT `+subscriptionColumns+` FROM location_subscriptions WHERE account_id = $1 ORDER BY created_at`, c.GetString(ctxAccountID))
+	rows, err := db.QueryContext(c.Request.Context(), `SELECT `+subscriptionColumns+` FROM location_subscriptions WHERE account_id = $1 ORDER BY created_at`, c.GetString(ctxAccountID))
 	if err != nil {
 		internalError(c, err)
 		return
@@ -127,7 +127,7 @@ func CreateSubscription(c *gin.Context) {
 
 	// The count check and insert share one statement so concurrent requests
 	// can't exceed the limit by much; the limit is a guard, not a quota.
-	row := db.QueryRow(`
+	row := db.QueryRowContext(c.Request.Context(), `
 		INSERT INTO location_subscriptions
 			(account_id, name, lat, lon, min_level, quiet_start, quiet_end, quiet_timezone, allow_emergency_during_quiet)
 		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
@@ -166,7 +166,7 @@ func UpdateSubscription(c *gin.Context) {
 
 	start, end, tz := in.quietColumns()
 	// Moving the location or changing the threshold starts alerting fresh.
-	row := db.QueryRow(`
+	row := db.QueryRowContext(c.Request.Context(), `
 		UPDATE location_subscriptions
 		SET name = $3, lat = $4, lon = $5, min_level = $6,
 			quiet_start = $7, quiet_end = $8, quiet_timezone = $9,
@@ -197,7 +197,7 @@ func DeleteSubscription(c *gin.Context) {
 		return
 	}
 
-	result, err := db.Exec(`DELETE FROM location_subscriptions WHERE id = $1 AND account_id = $2`, id, c.GetString(ctxAccountID))
+	result, err := db.ExecContext(c.Request.Context(), `DELETE FROM location_subscriptions WHERE id = $1 AND account_id = $2`, id, c.GetString(ctxAccountID))
 	if err != nil {
 		internalError(c, err)
 		return

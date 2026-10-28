@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
+	"database/sql/driver"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"regexp"
 	"runtime/debug"
@@ -81,7 +84,37 @@ func errorCode(status int) string {
 func internalError(c *gin.Context, err error) {
 	slog.Error("internal error", "request_id", GetRequestID(c), "method", c.Request.Method,
 		"route", c.FullPath(), "error", err.Error())
+	if unavailable(err) {
+		c.Header("Retry-After", "5")
+		respondError(c, http.StatusServiceUnavailable, "service temporarily unavailable, try again shortly")
+		return
+	}
 	respondError(c, http.StatusInternalServerError, "internal server error")
+}
+
+// unavailable reports errors from the database being down or too slow (a
+// refused or broken connection, or the request deadline passing), which
+// clients should retry, as opposed to bugs.
+func unavailable(err error) bool {
+	var netErr net.Error
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) ||
+		errors.Is(err, driver.ErrBadConn) || errors.As(err, &netErr)
+}
+
+// RequestTimeout bounds how long a request may take, including database
+// calls, so a slow database answers 503 instead of holding connections
+// until the server's write timeout. 0 disables it.
+func RequestTimeout(d time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if d <= 0 {
+			c.Next()
+			return
+		}
+		ctx, cancel := context.WithTimeout(c.Request.Context(), d)
+		defer cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
 }
 
 // badRequestBody reports a body that could not be read or decoded, telling
