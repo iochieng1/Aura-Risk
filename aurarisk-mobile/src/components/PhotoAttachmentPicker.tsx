@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useT } from '../i18n';
 import { deleteLocalPhoto, MAX_PHOTOS_PER_REPORT, pickPhotosFromLibrary, takePhoto } from '../photos/photoStore';
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 export default function PhotoAttachmentPicker({ photos, onChange }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useT();
   const remaining = MAX_PHOTOS_PER_REPORT - photos.length;
 
   const add = async (source: 'library' | 'camera') => {
@@ -19,12 +21,12 @@ export default function PhotoAttachmentPicker({ photos, onChange }: Props) {
     try {
       const added = source === 'library' ? await pickPhotosFromLibrary(remaining) : await takePhoto();
       if (added === 'permission_denied') {
-        setError('Camera access was not granted.');
+        setError(t('mobile.cameraDenied'));
         return;
       }
       onChange([...photos, ...added].slice(0, MAX_PHOTOS_PER_REPORT));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add photo.');
+      setError(err instanceof Error ? err.message : t('mobile.photoFailed'));
     } finally {
       setBusy(false);
     }
@@ -38,13 +40,13 @@ export default function PhotoAttachmentPicker({ photos, onChange }: Props) {
   return (
     <View style={styles.container}>
       <Text style={styles.label}>
-        Photos ({photos.length}/{MAX_PHOTOS_PER_REPORT})
+        {t('mobile.photos', { count: photos.length, max: MAX_PHOTOS_PER_REPORT })}
       </Text>
       <View style={styles.grid}>
         {photos.map((uri, index) => (
           <View key={uri} style={styles.thumbWrap}>
-            <Image source={{ uri }} style={styles.thumb} accessibilityLabel={`Attached photo ${index + 1}`} />
-            <Pressable style={styles.removeBadge} onPress={() => remove(uri)} accessibilityRole="button" accessibilityLabel={`Remove photo ${index + 1}`}>
+            <Image source={{ uri }} style={styles.thumb} accessibilityLabel={t('mobile.attachedPhoto', { n: index + 1 })} />
+            <Pressable style={styles.removeBadge} onPress={() => remove(uri)} accessibilityRole="button" accessibilityLabel={t('mobile.removePhoto', { n: index + 1 })}>
               <Text style={styles.removeText}>×</Text>
             </Pressable>
           </View>
@@ -54,14 +56,14 @@ export default function PhotoAttachmentPicker({ photos, onChange }: Props) {
       {remaining > 0 && !busy && (
         <View style={styles.actions}>
           <Pressable style={styles.button} onPress={() => add('library')} accessibilityRole="button">
-            <Text>Choose photo</Text>
+            <Text>{t('mobile.choosePhoto')}</Text>
           </Pressable>
           <Pressable style={styles.button} onPress={() => add('camera')} accessibilityRole="button">
-            <Text>Take photo</Text>
+            <Text>{t('mobile.takePhoto')}</Text>
           </Pressable>
         </View>
       )}
-      <Text style={styles.hint}>Location data embedded in photos is removed before upload.</Text>
+      <Text style={styles.hint}>{t('mobile.photoHint')}</Text>
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );

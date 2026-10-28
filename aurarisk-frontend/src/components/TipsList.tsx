@@ -1,8 +1,11 @@
+import { useT } from "../i18n";
+
 export default function TipsList({ tips }: { tips: string[] }) {
+  const { t } = useT();
   if (!tips.length) return null;
   return (
     <div>
-      <h3 className="text-sm font-semibold text-gray-700 mb-2">Preparedness Tips</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">{t("web.tips")}</h3>
       <ul className="space-y-1.5">
         {tips.map((tip, i) => (
           <li key={i} className="flex items-start gap-2 text-xs text-gray-600">

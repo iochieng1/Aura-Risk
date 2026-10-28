@@ -1,6 +1,7 @@
-import { KENYA_COUNTIES_SORTED, type KenyaCounty, type Location, MAX_WARD_BYTES, REPORT_CATEGORIES } from '@aurarisk/shared';
+import { categoryLabel, KENYA_COUNTIES_SORTED, type KenyaCounty, type Location, MAX_WARD_BYTES, REPORT_CATEGORIES } from '@aurarisk/shared';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import { ReportRejectedError, ReportValidationError, submitReport } from '../services/api';
 import { ReportCategory } from '../types/api';
 import PhotoAttachmentPicker from './PhotoAttachmentPicker';
@@ -24,22 +25,23 @@ export default function ReportComposer({ location, onSubmitted }: Props) {
   const [photos, setPhotos] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { lang, t } = useT();
 
   const onSubmit = async () => {
-    if (!location) return setStatus('Choose a location above first.');
+    if (!location) return setStatus(t('mobile.chooseLocationFirst'));
 
     setSubmitting(true);
     setStatus(null);
     try {
       const area = county ? { county, ...(ward.trim() && { ward: ward.trim() }) } : {};
       const result = await submitReport({ location, category, note, ...area }, photos);
-      setStatus(result.queued ? 'Saved. It will be sent when you are back online.' : 'Report sent. Photos appear after a safety check.');
+      setStatus(result.queued ? t('mobile.queued') : t('mobile.sent'));
       setNote('');
       setPhotos([]);
       onSubmitted?.();
     } catch (err) {
       if (err instanceof ReportValidationError) setStatus(err.message);
-      else setStatus(err instanceof ReportRejectedError ? 'The server rejected this report. Check the details.' : 'Could not send report.');
+      else setStatus(err instanceof ReportRejectedError ? t('mobile.rejected') : t('mobile.sendFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -47,9 +49,9 @@ export default function ReportComposer({ location, onSubmitted }: Props) {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.heading}>Report a flood issue</Text>
+      <Text style={styles.heading}>{t('mobile.reportHeading')}</Text>
       <Text style={styles.meta} numberOfLines={2}>
-        {location ? `At ${location.name}` : 'Choose a location above to report.'}
+        {location ? t('mobile.reportAt', { place: location.name }) : t('mobile.chooseLocationToReport')}
       </Text>
       <View style={styles.chips}>
         {REPORT_CATEGORIES.map((c) => (
@@ -60,23 +62,23 @@ export default function ReportComposer({ location, onSubmitted }: Props) {
             accessibilityRole="radio"
             accessibilityState={{ selected: category === c.value }}
           >
-            <Text style={category === c.value ? styles.chipTextSelected : undefined}>{c.label}</Text>
+            <Text style={category === c.value ? styles.chipTextSelected : undefined}>{categoryLabel(lang, c.value)}</Text>
           </Pressable>
         ))}
       </View>
-      <TextInput style={[styles.input, styles.note]} placeholder="What do you see?" value={note} onChangeText={setNote} multiline />
+      <TextInput style={[styles.input, styles.note]} placeholder={t('mobile.notePlaceholder')} value={note} onChangeText={setNote} multiline />
       {county ? (
         <View style={styles.countyRow}>
-          <Text>County: {county}</Text>
-          <Pressable onPress={() => { setCounty(null); setWard(''); }} accessibilityRole="button" accessibilityLabel={`Change county from ${county}`}>
-            <Text style={styles.link}>Change</Text>
+          <Text>{t('mobile.countyValue', { county })}</Text>
+          <Pressable onPress={() => { setCounty(null); setWard(''); }} accessibilityRole="button" accessibilityLabel={t('mobile.changeCountyLabel', { county })}>
+            <Text style={styles.link}>{t('mobile.change')}</Text>
           </Pressable>
         </View>
       ) : (
         <>
           <TextInput
             style={styles.input}
-            placeholder="County (optional), e.g. Kisumu"
+            placeholder={t('mobile.countyPlaceholder')}
             value={countyQuery}
             onChangeText={setCountyQuery}
             autoCorrect={false}
@@ -93,7 +95,7 @@ export default function ReportComposer({ location, onSubmitted }: Props) {
         </>
       )}
       {county && (
-        <TextInput style={styles.input} placeholder="Ward (optional), e.g. Nyalenda A" value={ward} onChangeText={setWard} maxLength={MAX_WARD_BYTES} />
+        <TextInput style={styles.input} placeholder={t('mobile.wardPlaceholder')} value={ward} onChangeText={setWard} maxLength={MAX_WARD_BYTES} />
       )}
       <PhotoAttachmentPicker photos={photos} onChange={setPhotos} />
       <Pressable
@@ -102,7 +104,7 @@ export default function ReportComposer({ location, onSubmitted }: Props) {
         disabled={submitting || !location}
         accessibilityRole="button"
       >
-        <Text style={styles.buttonText}>{submitting ? 'Sending…' : 'Submit report'}</Text>
+        <Text style={styles.buttonText}>{submitting ? t('mobile.sending') : t('mobile.submitReport')}</Text>
       </Pressable>
       {status && <Text accessibilityLiveRegion="polite">{status}</Text>}
     </View>

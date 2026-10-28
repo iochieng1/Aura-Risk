@@ -1,9 +1,10 @@
 import type { Location, RiskAssessment, CommunityReport, NewReportDetails } from "../types";
 import { createApiClient, type CountyStatsResponse, type StatsPeriod } from "@aurarisk/shared";
+import { getLang } from "../i18n";
 
 // Empty means same origin: the Vite dev server proxies /api to the backend,
 // and in production a reverse proxy can do the same.
-const api = createApiClient({ baseUrl: import.meta.env.VITE_API_BASE_URL ?? "" });
+const api = createApiClient({ baseUrl: import.meta.env.VITE_API_BASE_URL ?? "", lang: getLang });
 
 // Mock data is for working on the UI without a backend. import.meta.env.DEV is
 // false in production builds, so Vite removes these branches and mock.ts.

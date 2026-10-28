@@ -9,6 +9,8 @@ import {
   listSubscriptions,
   MAX_SUBSCRIPTIONS,
 } from '../notifications/subscriptions';
+import { riskLevelLabel } from '@aurarisk/shared';
+import { useT } from '../i18n';
 import { RiskLevel, Subscription } from '../types/api';
 
 const LEVELS: RiskLevel[] = ['Advisory', 'Alert', 'Emergency'];
@@ -29,6 +31,7 @@ export default function NotificationSettings() {
   const [quietEnd, setQuietEnd] = useState('07:00');
   const [allowEmergency, setAllowEmergency] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { lang, t } = useT();
 
   const loadSubscriptions = useCallback(async () => {
     setSubscriptions(await getCachedSubscriptions());
@@ -59,7 +62,7 @@ export default function NotificationSettings() {
       await disablePushNotifications();
       setConsent('off');
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Could not turn alerts off. Try again when online.');
+      setMessage(err instanceof Error ? err.message : t('mobile.alertsOffFailed'));
     }
   };
 
@@ -80,10 +83,10 @@ export default function NotificationSettings() {
     setMessage(null);
     const latNum = Number(lat);
     const lonNum = Number(lon);
-    if (!name.trim() || name.length > 100) return setMessage('Enter a name (up to 100 characters).');
-    if (!lat.trim() || !Number.isFinite(latNum) || latNum < -90 || latNum > 90) return setMessage('Latitude must be between -90 and 90.');
-    if (!lon.trim() || !Number.isFinite(lonNum) || lonNum < -180 || lonNum > 180) return setMessage('Longitude must be between -180 and 180.');
-    if (quietEnabled && (!isValidTime(quietStart) || !isValidTime(quietEnd))) return setMessage('Quiet hours must use HH:MM (24-hour).');
+    if (!name.trim() || name.length > 100) return setMessage(t('mobile.nameRequired'));
+    if (!lat.trim() || !Number.isFinite(latNum) || latNum < -90 || latNum > 90) return setMessage(t('mobile.latRange'));
+    if (!lon.trim() || !Number.isFinite(lonNum) || lonNum < -180 || lonNum > 180) return setMessage(t('mobile.lonRange'));
+    if (quietEnabled && (!isValidTime(quietStart) || !isValidTime(quietEnd))) return setMessage(t('mobile.quietFormat'));
 
     setSaving(true);
     try {
@@ -100,7 +103,7 @@ export default function NotificationSettings() {
       setLon('');
       setSubscriptions(await getCachedSubscriptions());
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Could not save location.');
+      setMessage(err instanceof Error ? err.message : t('mobile.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -111,7 +114,7 @@ export default function NotificationSettings() {
       await deleteSubscription(id);
       setSubscriptions(await getCachedSubscriptions());
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Could not remove location.');
+      setMessage(err instanceof Error ? err.message : t('mobile.removeFailed'));
     }
   };
 
@@ -119,31 +122,27 @@ export default function NotificationSettings() {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.heading}>Flood alerts</Text>
+      <Text style={styles.heading}>{t('mobile.alerts')}</Text>
 
       <View style={styles.row}>
-        <Text style={styles.label}>Push notifications</Text>
+        <Text style={styles.label}>{t('mobile.push')}</Text>
         <Switch
           value={consent === 'on' || consent === 'explaining' || consent === 'requesting'}
           onValueChange={onToggle}
           disabled={consent === 'requesting'}
-          accessibilityLabel="Push notifications for flood alerts"
+          accessibilityLabel={t('mobile.pushLabel')}
         />
       </View>
 
       {(consent === 'explaining' || consent === 'requesting') && (
         <View style={styles.card}>
-          <Text style={styles.body}>
-            AuraRisk can notify you when flood risk rises at the locations you follow below. We send your
-            device&apos;s notification token to our server and use it only for these alerts. Nothing is sent
-            during your quiet hours unless you allow emergency alerts. You can turn this off at any time.
-          </Text>
+          <Text style={styles.body}>{t('mobile.consent')}</Text>
           <View style={styles.row}>
             <Pressable style={styles.button} onPress={onAgree} disabled={consent === 'requesting'} accessibilityRole="button">
-              <Text style={styles.buttonText}>{consent === 'requesting' ? 'Requesting…' : 'Allow alerts'}</Text>
+              <Text style={styles.buttonText}>{consent === 'requesting' ? t('mobile.requesting') : t('mobile.allowAlerts')}</Text>
             </Pressable>
             <Pressable style={styles.secondaryButton} onPress={() => setConsent('off')} accessibilityRole="button">
-              <Text>Not now</Text>
+              <Text>{t('mobile.notNow')}</Text>
             </Pressable>
           </View>
         </View>
@@ -151,40 +150,40 @@ export default function NotificationSettings() {
 
       {consent === 'denied' && (
         <View style={styles.card}>
-          <Text style={styles.body}>Notifications are blocked in system settings for this app.</Text>
+          <Text style={styles.body}>{t('mobile.notificationsBlocked')}</Text>
           <Pressable style={styles.secondaryButton} onPress={() => Linking.openSettings()} accessibilityRole="button">
-            <Text>Open settings</Text>
+            <Text>{t('ui.openSettings')}</Text>
           </Pressable>
         </View>
       )}
 
       {message && <Text style={styles.error}>{message}</Text>}
 
-      <Text style={styles.subheading}>Locations you follow ({subscriptions.length}/{MAX_SUBSCRIPTIONS})</Text>
+      <Text style={styles.subheading}>{t('mobile.following', { count: subscriptions.length, max: MAX_SUBSCRIPTIONS })}</Text>
       {subscriptions.map((s) => (
         <View key={s.id} style={styles.subscription}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>{s.name}</Text>
             <Text style={styles.meta}>
-              {s.min_level}+ · {s.lat.toFixed(3)}, {s.lon.toFixed(3)}
-              {s.quiet_hours ? ` · quiet ${s.quiet_hours.start}–${s.quiet_hours.end}` : ''}
-              {isWithinQuietHours(s.quiet_hours) ? ' (quiet now)' : ''}
+              {riskLevelLabel(lang, s.min_level as RiskLevel)}+ · {s.lat.toFixed(3)}, {s.lon.toFixed(3)}
+              {s.quiet_hours ? ` · ${t('mobile.quietRange', { start: s.quiet_hours.start, end: s.quiet_hours.end })}` : ''}
+              {isWithinQuietHours(s.quiet_hours) ? ` ${t('mobile.quietNow')}` : ''}
             </Text>
           </View>
-          <Pressable onPress={() => onRemove(s.id)} accessibilityRole="button" accessibilityLabel={`Stop following ${s.name}`}>
-            <Text style={styles.remove}>Remove</Text>
+          <Pressable onPress={() => onRemove(s.id)} accessibilityRole="button" accessibilityLabel={t('mobile.stopFollowing', { name: s.name })}>
+            <Text style={styles.remove}>{t('mobile.remove')}</Text>
           </Pressable>
         </View>
       ))}
 
       {subscriptions.length < MAX_SUBSCRIPTIONS && (
         <View style={styles.card}>
-          <TextInput style={styles.input} placeholder="Name (e.g. Home)" value={name} onChangeText={setName} maxLength={100} />
+          <TextInput style={styles.input} placeholder={t('mobile.subscriptionName')} value={name} onChangeText={setName} maxLength={100} />
           <View style={styles.row}>
-            <TextInput style={[styles.input, styles.half]} placeholder="Latitude" value={lat} onChangeText={setLat} keyboardType="numbers-and-punctuation" />
-            <TextInput style={[styles.input, styles.half]} placeholder="Longitude" value={lon} onChangeText={setLon} keyboardType="numbers-and-punctuation" />
+            <TextInput style={[styles.input, styles.half]} placeholder={t('ui.latitude')} value={lat} onChangeText={setLat} keyboardType="numbers-and-punctuation" />
+            <TextInput style={[styles.input, styles.half]} placeholder={t('ui.longitude')} value={lon} onChangeText={setLon} keyboardType="numbers-and-punctuation" />
           </View>
-          <Text style={styles.meta}>Notify me at</Text>
+          <Text style={styles.meta}>{t('mobile.notifyAt')}</Text>
           <View style={styles.row}>
             {LEVELS.map((level) => (
               <Pressable
@@ -194,29 +193,29 @@ export default function NotificationSettings() {
                 accessibilityRole="radio"
                 accessibilityState={{ selected: minLevel === level }}
               >
-                <Text style={minLevel === level ? styles.chipTextSelected : undefined}>{level}+</Text>
+                <Text style={minLevel === level ? styles.chipTextSelected : undefined}>{riskLevelLabel(lang, level)}+</Text>
               </Pressable>
             ))}
           </View>
           <View style={styles.row}>
-            <Text style={styles.label}>Quiet hours</Text>
-            <Switch value={quietEnabled} onValueChange={setQuietEnabled} accessibilityLabel="Quiet hours" />
+            <Text style={styles.label}>{t('mobile.quietHours')}</Text>
+            <Switch value={quietEnabled} onValueChange={setQuietEnabled} accessibilityLabel={t('mobile.quietHours')} />
           </View>
           {quietEnabled && (
             <>
               <View style={styles.row}>
-                <TextInput style={[styles.input, styles.half]} value={quietStart} onChangeText={setQuietStart} placeholder="22:00" accessibilityLabel="Quiet hours start" />
-                <TextInput style={[styles.input, styles.half]} value={quietEnd} onChangeText={setQuietEnd} placeholder="07:00" accessibilityLabel="Quiet hours end" />
+                <TextInput style={[styles.input, styles.half]} value={quietStart} onChangeText={setQuietStart} placeholder="22:00" accessibilityLabel={t('mobile.quietStart')} />
+                <TextInput style={[styles.input, styles.half]} value={quietEnd} onChangeText={setQuietEnd} placeholder="07:00" accessibilityLabel={t('mobile.quietEnd')} />
               </View>
               <View style={styles.row}>
-                <Text style={[styles.body, { flex: 1 }]}>Allow Emergency alerts during quiet hours</Text>
-                <Switch value={allowEmergency} onValueChange={setAllowEmergency} accessibilityLabel="Allow emergency alerts during quiet hours" />
+                <Text style={[styles.body, { flex: 1 }]}>{t('mobile.allowEmergency')}</Text>
+                <Switch value={allowEmergency} onValueChange={setAllowEmergency} accessibilityLabel={t('mobile.allowEmergency')} />
               </View>
-              <Text style={styles.meta}>Time zone: {deviceTimeZone()}</Text>
+              <Text style={styles.meta}>{t('mobile.timeZone', { zone: deviceTimeZone() })}</Text>
             </>
           )}
           <Pressable style={styles.button} onPress={onAdd} disabled={saving} accessibilityRole="button">
-            <Text style={styles.buttonText}>{saving ? 'Saving…' : 'Follow location'}</Text>
+            <Text style={styles.buttonText}>{saving ? t('mobile.saving') : t('mobile.follow')}</Text>
           </Pressable>
         </View>
       )}

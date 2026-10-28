@@ -6,6 +6,7 @@ import TipsList from "./TipsList";
 import ReportForm from "./ReportForm";
 import ReportList from "./ReportList";
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from "./StateMessages";
+import { useT } from "../i18n";
 
 /** The mobile drawer, which the header's menu button opens. */
 export const SIDEBAR_ID = "sidebar-drawer";
@@ -44,6 +45,7 @@ export default function Sidebar({
   onClose,
 }: Props) {
   const drawer = useRef<HTMLDivElement>(null);
+  const { t } = useT();
 
   // The mobile drawer is modal: focus moves into it, and Escape closes it.
   useEffect(() => {
@@ -63,7 +65,7 @@ export default function Sidebar({
 
   const content = (
     <aside
-      aria-label="Flood risk and reports"
+      aria-label={t("web.sidebarLabel")}
       className="w-full md:w-96 bg-white border-r border-gray-200 flex flex-col overflow-hidden h-full"
     >
       <div className="p-4 border-b border-gray-100">
@@ -99,7 +101,7 @@ export default function Sidebar({
       <div className="hidden md:flex">{content}</div>
 
       {open && (
-        <div id={SIDEBAR_ID} className="md:hidden fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-label="Flood risk and reports">
+        <div id={SIDEBAR_ID} className="md:hidden fixed inset-0 z-40 flex" role="dialog" aria-modal="true" aria-label={t("web.sidebarLabel")}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
           <div ref={drawer} className="relative w-80 max-w-[85vw] h-full shadow-2xl animate-slide-in motion-reduce:animate-none">
             {content}

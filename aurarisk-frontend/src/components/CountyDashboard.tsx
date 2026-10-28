@@ -3,12 +3,14 @@ import type { CountyStatsResponse } from "@aurarisk/shared";
 import { fetchCountyStats, openDataUrl } from "../api/risk";
 import { describeError } from "../api/errors";
 import { ErrorState } from "./StateMessages";
+import { useT } from "../i18n";
+import type { MessageKey } from "@aurarisk/shared";
 
-const PERIODS = [
-  { days: 30, label: "Last 30 days" },
-  { days: 90, label: "Last 90 days" },
-  { days: 365, label: "Last 12 months" },
-] as const;
+const PERIODS: readonly { days: number; label: MessageKey }[] = [
+  { days: 30, label: "dash.last30" },
+  { days: 90, label: "dash.last90" },
+  { days: 365, label: "dash.last365" },
+];
 
 /** The `days` days up to and including today, as UTC dates. */
 function periodFor(days: number) {
@@ -18,10 +20,10 @@ function periodFor(days: number) {
   return { from: day(from), to: day(to) };
 }
 
-function formatHours(hours: number | null): string {
+function formatHours(hours: number | null, t: ReturnType<typeof useT>["t"]): string {
   if (hours === null) return "–";
-  if (hours < 48) return `${hours.toFixed(1)} h`;
-  return `${(hours / 24).toFixed(1)} days`;
+  if (hours < 48) return t("dash.hours", { n: hours.toFixed(1) });
+  return t("dash.days", { n: (hours / 24).toFixed(1) });
 }
 
 /** Public county response dashboard and open data downloads (GET /api/stats/counties). */
@@ -31,6 +33,7 @@ export default function CountyDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const period = periodFor(days);
+  const { lang, t } = useT();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,11 +42,11 @@ export default function CountyDashboard() {
       setStats(await fetchCountyStats(periodFor(days)));
     } catch (err) {
       console.error("Failed to load county stats", err);
-      setError(`Couldn't load county statistics. ${describeError(err)}`);
+      setError(t("dash.loadFailed", { reason: describeError(err, lang) }));
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, lang, t]);
 
   useEffect(() => {
     load();
@@ -62,14 +65,13 @@ export default function CountyDashboard() {
     <main className="flex-1 overflow-y-auto bg-gray-50">
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         <section>
-          <h2 className="text-xl font-semibold text-gray-900">How counties respond to flood reports</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t("dash.title")}</h2>
           <p className="mt-1 text-sm text-gray-600">
-            Verified community reports per county, whether the county government has acknowledged or resolved
-            them, and the median time it took. Times count from when the report was made.
+            {t("dash.intro")}
           </p>
         </section>
 
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Period">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("dash.period")}>
           {PERIODS.map((p) => (
             <button
               key={p.days}
@@ -82,18 +84,18 @@ export default function CountyDashboard() {
                   : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
               }`}
             >
-              {p.label}
+              {t(p.label)}
             </button>
           ))}
           <span className="text-xs text-gray-500 ml-auto">
-            {period.from} to {period.to}
+            {t("dash.range", period)}
           </span>
         </div>
 
         {error && <ErrorState message={error} onRetry={load} />}
         {loading && !stats && (
           <p role="status" className="text-sm text-gray-500">
-            Loading county statistics…
+            {t("dash.loading")}
           </p>
         )}
 
@@ -101,9 +103,9 @@ export default function CountyDashboard() {
           <>
             <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
-                ["Verified reports", totals.verified],
-                ["Acknowledged by a county", totals.acknowledged],
-                ["Resolved", totals.resolved],
+                [t("dash.verified"), totals.verified],
+                [t("dash.acknowledgedTotal"), totals.acknowledged],
+                [t("dash.resolved"), totals.resolved],
               ].map(([label, value]) => (
                 <div key={label} className="bg-white border border-gray-200 rounded-xl p-4">
                   <dt className="text-xs text-gray-500">{label}</dt>
@@ -113,20 +115,20 @@ export default function CountyDashboard() {
             </dl>
 
             {stats.counties.length === 0 ? (
-              <p className="text-sm text-gray-500 italic">No verified reports with a county in this period.</p>
+              <p className="text-sm text-gray-500 italic">{t("dash.none")}</p>
             ) : (
               <div className="overflow-x-auto bg-white border border-gray-200 rounded-xl">
                 <table className="min-w-full text-sm">
-                  <caption className="sr-only">County response, {period.from} to {period.to}</caption>
+                  <caption className="sr-only">{t("dash.caption", period)}</caption>
                   <thead className="bg-gray-50 text-left text-xs text-gray-600">
                     <tr>
-                      <th scope="col" className="px-3 py-2 font-semibold">County</th>
-                      <th scope="col" className="px-3 py-2 font-semibold text-right">Verified</th>
-                      <th scope="col" className="px-3 py-2 font-semibold text-right">Awaiting</th>
-                      <th scope="col" className="px-3 py-2 font-semibold text-right">Acknowledged</th>
-                      <th scope="col" className="px-3 py-2 font-semibold text-right">Resolved</th>
-                      <th scope="col" className="px-3 py-2 font-semibold text-right">Median to acknowledge</th>
-                      <th scope="col" className="px-3 py-2 font-semibold text-right">Median to resolve</th>
+                      <th scope="col" className="px-3 py-2 font-semibold">{t("dash.colCounty")}</th>
+                      <th scope="col" className="px-3 py-2 font-semibold text-right">{t("dash.colVerified")}</th>
+                      <th scope="col" className="px-3 py-2 font-semibold text-right">{t("dash.colAwaiting")}</th>
+                      <th scope="col" className="px-3 py-2 font-semibold text-right">{t("dash.colAcknowledged")}</th>
+                      <th scope="col" className="px-3 py-2 font-semibold text-right">{t("dash.colResolved")}</th>
+                      <th scope="col" className="px-3 py-2 font-semibold text-right">{t("dash.colMedianAck")}</th>
+                      <th scope="col" className="px-3 py-2 font-semibold text-right">{t("dash.colMedianResolve")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 tabular-nums">
@@ -137,8 +139,8 @@ export default function CountyDashboard() {
                         <td className="px-3 py-2 text-right">{c.open}</td>
                         <td className="px-3 py-2 text-right">{c.acknowledged}</td>
                         <td className="px-3 py-2 text-right">{c.resolved}</td>
-                        <td className="px-3 py-2 text-right">{formatHours(c.median_hours_to_acknowledge)}</td>
-                        <td className="px-3 py-2 text-right">{formatHours(c.median_hours_to_resolve)}</td>
+                        <td className="px-3 py-2 text-right">{formatHours(c.median_hours_to_acknowledge, t)}</td>
+                        <td className="px-3 py-2 text-right">{formatHours(c.median_hours_to_resolve, t)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -149,21 +151,19 @@ export default function CountyDashboard() {
         )}
 
         <section className="bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-700 space-y-2">
-          <h3 className="font-semibold text-gray-900">Open data</h3>
+          <h3 className="font-semibold text-gray-900">{t("dash.openData")}</h3>
           <p>
-            Download the verified reports for this period. Coordinates are rounded to about 1 km, and notes,
-            photos, place names and anything about the reporter are left out. Licensed{" "}
+            {t("dash.openDataBody")}{" "}
             <a className="text-blue-700 underline" href="https://creativecommons.org/licenses/by/4.0/">
               CC BY 4.0
             </a>
-            : credit "AuraRisk community flood reports".
           </p>
           <p className="flex gap-3">
             <a className="text-blue-700 underline font-medium" href={openDataUrl("csv", period)}>
-              Download CSV
+              {t("dash.downloadCsv")}
             </a>
             <a className="text-blue-700 underline font-medium" href={openDataUrl("json", period)}>
-              Download JSON
+              {t("dash.downloadJson")}
             </a>
           </p>
         </section>

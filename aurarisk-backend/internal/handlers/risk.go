@@ -1,12 +1,14 @@
 package handlers
 
 import (
-	"aurarisk-backend/internal/services"
 	"errors"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
 	"time"
+
+	"aurarisk-backend/internal/models"
+	"aurarisk-backend/internal/services"
+	"github.com/gin-gonic/gin"
 )
 
 func GetRisk(c *gin.Context) {
@@ -43,8 +45,18 @@ func GetRisk(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, risk)
+	respondRisk(c, risk)
+}
 
+// respondRisk sends an assessment with its summary and tips in the caller's
+// language (lang query parameter, else Accept-Language; English by default).
+// Only the response is localized: alerts and logs stay in English.
+func respondRisk(c *gin.Context, risk *models.RiskAssessment) {
+	lang := services.NegotiateLanguage(c.Query("lang"), c.GetHeader("Accept-Language"))
+	services.LocalizeRisk(risk, lang)
+	c.Header("Content-Language", lang)
+	c.Header("Vary", "Accept-Language")
+	c.JSON(http.StatusOK, risk)
 }
 
 type clientWeatherRiskRequest struct {
@@ -76,5 +88,5 @@ func PostRiskWithWeather(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, services.AssessClientWeather(c.Request.Context(), *req.Lat, *req.Lon, "Selected Location", req.Weather, now))
+	respondRisk(c, services.AssessClientWeather(c.Request.Context(), *req.Lat, *req.Lon, "Selected Location", req.Weather, now))
 }

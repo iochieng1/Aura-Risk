@@ -1,4 +1,5 @@
 import { DEFAULT_REPORT_RADIUS_KM } from './constants';
+import type { Lang } from './i18n';
 import type { CommunityReport, Coordinates, CountyStatsResponse, Location, NewReportInput, RiskAssessment } from './types';
 import { type FieldErrors, isCommunityReport, isRiskAssessment, validateNewReport } from './validation';
 import { openMeteoForecastUrl } from './weather';
@@ -17,6 +18,11 @@ export interface ApiClientOptions {
    * POST /api/risk. Default true.
    */
   weatherFallback?: boolean;
+  /**
+   * The user's language, read on each request. GET and POST /api/risk return
+   * the summary and tips in it. Unset leaves it to the server (English).
+   */
+  lang?: () => Lang | undefined;
 }
 
 /** The server answered with a non-2xx status. `message` is the backend's `error` field when present. */
@@ -91,7 +97,7 @@ const readError = async (response: Response): Promise<ApiError> => {
   return new ApiError(response.status, message, code, requestId, retryAfter > 0 ? retryAfter : undefined);
 };
 
-export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = true }: ApiClientOptions): ApiClient {
+export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = true, lang }: ApiClientOptions): ApiClient {
   const doFetch: FetchLike = fetchImpl ?? ((url, init) => fetch(url, init));
   const root = baseUrl.replace(/\/+$/, '');
 
@@ -102,6 +108,10 @@ export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = t
   };
 
   const coordQuery = ({ lat, lon }: Coordinates) => `lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+  const langQuery = (separator: '?' | '&') => {
+    const value = lang?.();
+    return value ? `${separator}lang=${value}` : '';
+  };
 
   // Fetches weather on this device and asks the server to score it. If that
   // fails too, the server's original 503 is what the caller sees.
@@ -114,7 +124,7 @@ export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = t
     } catch {
       throw serverError;
     }
-    return request('/api/risk', {
+    return request(`/api/risk${langQuery('?')}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lat, lon, weather }),
@@ -125,7 +135,7 @@ export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = t
     async getRisk(at) {
       let body: unknown;
       try {
-        body = await request(`/api/risk?${coordQuery(at)}`);
+        body = await request(`/api/risk?${coordQuery(at)}${langQuery('&')}`);
       } catch (err) {
         if (!weatherFallback || !(err instanceof ApiError) || err.status !== 503) throw err;
         body = await riskFromDeviceWeather(at, err);

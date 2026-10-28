@@ -6,7 +6,9 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 import type { Location, RiskAssessment, CommunityReport } from "../types";
+import { categoryLabel } from "@aurarisk/shared";
 import { RISK_CONFIG } from "../utils/risk";
+import { getLang } from "../i18n";
 
 const REPORT_ICONS: Record<string, string> = {
   flooding: "🌊",
@@ -134,7 +136,7 @@ function reportPopup(r: CommunityReport): HTMLElement {
   box.style.fontSize = "12px";
   box.style.maxWidth = "200px";
   const title = document.createElement("strong");
-  title.textContent = r.category.replace("_", " ");
+  title.textContent = categoryLabel(getLang(), r.category);
   const note = document.createElement("div");
   note.textContent = r.note;
   box.append(title, note);

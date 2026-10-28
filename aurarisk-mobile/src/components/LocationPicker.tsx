@@ -9,6 +9,7 @@ import {
 import Constants from 'expo-constants';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useT } from '../i18n';
 import { formatCoordinates, getDeviceLocation, getLocationPermission, LocationPermission } from '../location/deviceLocation';
 
 const USER_AGENT = `AuraRisk-mobile/${Constants.expoConfig?.version ?? 'dev'}`;
@@ -43,6 +44,7 @@ export default function LocationPicker({ value, onChange }: Props) {
   const [lat, setLat] = useState('');
   const [lon, setLon] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
+  const { t } = useT();
 
   useEffect(() => {
     getLocationPermission().then(setPermission);
@@ -63,15 +65,15 @@ export default function LocationPicker({ value, onChange }: Props) {
         setPermission(result.blocked ? 'blocked' : 'denied');
         setNotice(
           result.blocked
-            ? { text: 'Location access is off for AuraRisk. Turn it on in Settings, or choose a place below.', openSettings: true }
-            : { text: 'No problem — search for a place or enter coordinates below.' }
+            ? { text: t('mobile.locationBlocked'), openSettings: true }
+            : { text: t('mobile.locationDenied') }
         );
         return;
       case 'services_disabled':
-        setNotice({ text: 'Location services are turned off on this device. Turn them on, or choose a place below.', openSettings: true });
+        setNotice({ text: t('mobile.servicesOff'), openSettings: true });
         return;
       case 'unavailable':
-        setNotice({ text: 'Could not get your position right now. Try again, or choose a place below.' });
+        setNotice({ text: t('mobile.positionUnavailable') });
         return;
     }
   };
@@ -107,7 +109,7 @@ export default function LocationPicker({ value, onChange }: Props) {
   const useCoordinates = () => {
     const coords = parseCoordinates(lat, lon);
     if (!coords.ok) return setErrors(coords.errors);
-    const name = manualName.trim() || `Pinned location (${formatCoordinates(coords.value.lat, coords.value.lon)})`;
+    const name = manualName.trim() || t('mobile.pinned', { coords: formatCoordinates(coords.value.lat, coords.value.lon) });
     const location = validateLocation({ name, ...coords.value });
     if (!location.ok) return setErrors(location.errors);
     setErrors({});
@@ -117,7 +119,7 @@ export default function LocationPicker({ value, onChange }: Props) {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.heading}>Location</Text>
+      <Text style={styles.heading}>{t('mobile.location')}</Text>
 
       <View style={styles.selected} accessibilityLiveRegion="polite">
         {value ? (
@@ -128,7 +130,7 @@ export default function LocationPicker({ value, onChange }: Props) {
             <Text style={styles.meta}>{formatCoordinates(value.lat, value.lon)}</Text>
           </>
         ) : (
-          <Text style={styles.meta}>No location selected yet.</Text>
+          <Text style={styles.meta}>{t('mobile.noLocation')}</Text>
         )}
       </View>
 
@@ -137,12 +139,12 @@ export default function LocationPicker({ value, onChange }: Props) {
         onPress={useMyLocation}
         disabled={locating}
         accessibilityRole="button"
-        accessibilityHint="Asks for location permission if needed"
+        accessibilityHint={t('mobile.askPermissionHint')}
       >
-        {locating ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Use my location</Text>}
+        {locating ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{t('mobile.useMyLocation')}</Text>}
       </Pressable>
       {permission === 'blocked' && !notice && (
-        <Text style={styles.meta}>Location access is off. You can still search or enter coordinates.</Text>
+        <Text style={styles.meta}>{t('mobile.locationOffHint')}</Text>
       )}
 
       {notice && (
@@ -150,7 +152,7 @@ export default function LocationPicker({ value, onChange }: Props) {
           <Text style={styles.body}>{notice.text}</Text>
           {notice.openSettings && (
             <Pressable style={styles.secondaryButton} onPress={() => Linking.openSettings()} accessibilityRole="button">
-              <Text>Open settings</Text>
+              <Text>{t('ui.openSettings')}</Text>
             </Pressable>
           )}
         </View>
@@ -165,7 +167,7 @@ export default function LocationPicker({ value, onChange }: Props) {
             accessibilityRole="tab"
             accessibilityState={{ selected: mode === m }}
           >
-            <Text style={mode === m ? styles.tabTextSelected : undefined}>{m === 'search' ? 'Search a place' : 'Enter coordinates'}</Text>
+            <Text style={mode === m ? styles.tabTextSelected : undefined}>{m === 'search' ? t('mobile.searchTab') : t('mobile.coordinatesTab')}</Text>
           </Pressable>
         ))}
       </View>
@@ -174,13 +176,13 @@ export default function LocationPicker({ value, onChange }: Props) {
         <View style={styles.group}>
           <TextInput
             style={styles.input}
-            placeholder="Town, street, or landmark"
+            placeholder={t('mobile.searchPlaceholder')}
             value={query}
             onChangeText={onQueryChange}
             onSubmitEditing={runSearch}
             autoCorrect={false}
             returnKeyType="search"
-            accessibilityLabel="Search for a place"
+            accessibilityLabel={t('mobile.searchLabel')}
           />
           <Pressable
             style={[styles.button, (searching || query.trim().length < MIN_PLACE_QUERY_LENGTH) && styles.disabled]}
@@ -188,50 +190,50 @@ export default function LocationPicker({ value, onChange }: Props) {
             disabled={searching || query.trim().length < MIN_PLACE_QUERY_LENGTH}
             accessibilityRole="button"
           >
-            <Text style={styles.buttonText}>Search</Text>
+            <Text style={styles.buttonText}>{t('ui.search')}</Text>
           </Pressable>
           {searching && <ActivityIndicator />}
           {!searching && searched !== null && results.length === 0 && (
-            <Text style={styles.meta}>No matches. Try a nearby town, or enter coordinates.</Text>
+            <Text style={styles.meta}>{t('mobile.noMatches')}</Text>
           )}
           {results.map((r) => (
             <Pressable key={`${r.lat},${r.lon}`} style={styles.result} onPress={() => pickResult(r)} accessibilityRole="button">
               <Text numberOfLines={2}>{r.name}</Text>
             </Pressable>
           ))}
-          {results.length > 0 && <Text style={styles.attribution}>Search © OpenStreetMap contributors</Text>}
+          {results.length > 0 && <Text style={styles.attribution}>{t('ui.osmCredit')}</Text>}
         </View>
       ) : (
         <View style={styles.group}>
           <TextInput
             style={styles.input}
-            placeholder="Name (optional)"
+            placeholder={t('ui.nameOptional')}
             value={manualName}
             onChangeText={setManualName}
-            accessibilityLabel="Location name"
+            accessibilityLabel={t('mobile.locationName')}
           />
           {errors.name && <Text style={styles.error}>{errors.name}</Text>}
           <View style={styles.row}>
             <TextInput
               style={[styles.input, styles.half]}
-              placeholder="Latitude"
+              placeholder={t('ui.latitude')}
               value={lat}
               onChangeText={setLat}
               keyboardType="numbers-and-punctuation"
-              accessibilityLabel="Latitude"
+              accessibilityLabel={t('ui.latitude')}
             />
             <TextInput
               style={[styles.input, styles.half]}
-              placeholder="Longitude"
+              placeholder={t('ui.longitude')}
               value={lon}
               onChangeText={setLon}
               keyboardType="numbers-and-punctuation"
-              accessibilityLabel="Longitude"
+              accessibilityLabel={t('ui.longitude')}
             />
           </View>
           {(errors.lat || errors.lon) && <Text style={styles.error}>{errors.lat ?? errors.lon}</Text>}
           <Pressable style={styles.secondaryButton} onPress={useCoordinates} accessibilityRole="button">
-            <Text>Use these coordinates</Text>
+            <Text>{t('mobile.useCoordinates')}</Text>
           </Pressable>
         </View>
       )}
