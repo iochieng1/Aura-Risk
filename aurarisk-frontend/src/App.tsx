@@ -7,7 +7,9 @@ import Header from "./components/Header";
 import Sidebar from "./components/Sidebar";
 import MapView from "./components/MapView";
 import MapListAlternative, { MAP_LIST_ID } from "./components/MapListAlternative";
+import CountyDashboard from "./components/CountyDashboard";
 import { useOnlineStatus } from "./hooks/useOnlineStatus";
+import { useHashView } from "./hooks/useHashView";
 
 // Kisumu, Kenya: the first pilot area (#56). VITE_DEFAULT_CENTER ("lat,lon")
 // moves the map elsewhere without a code change.
@@ -35,6 +37,7 @@ export default function App() {
   const [locating, setLocating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const online = useOnlineStatus();
+  const view = useHashView();
   const menuButton = useRef<HTMLButtonElement>(null);
   // Only the latest selection may update state; slower earlier requests are ignored.
   const latestRequest = useRef(0);
@@ -149,40 +152,47 @@ export default function App() {
 
   return (
     <div className="h-full flex flex-col">
-      <a
-        href={`#${MAP_LIST_ID}`}
-        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:px-3 focus:py-2 focus:bg-white focus:text-blue-700 focus:rounded-lg focus:shadow"
-      >
-        Skip to map contents as a list
-      </a>
+      {view === "map" && (
+        <a
+          href={`#${MAP_LIST_ID}`}
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:px-3 focus:py-2 focus:bg-white focus:text-blue-700 focus:rounded-lg focus:shadow"
+        >
+          Skip to map contents as a list
+        </a>
+      )}
       <Header
         ref={menuButton}
+        view={view}
         onLocate={handleLocate}
         locating={locating}
         onToggleSidebar={() => setSidebarOpen((o) => !o)}
         sidebarOpen={sidebarOpen}
       />
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        <Sidebar
-          onSelectLocation={loadLocation}
-          risk={risk}
-          reports={reports}
-          selectedLocation={selectedLocation}
-          loading={loading}
-          loadError={loadError}
-          reportsFailed={reportsFailed}
-          onRetry={retry}
-          online={online}
-          notice={notice}
-          onSubmitReport={handleSubmitReport}
-          open={sidebarOpen}
-          onClose={closeSidebar}
-        />
-        <main className="flex-1 relative">
-          <MapListAlternative location={selectedLocation} risk={risk} reports={reports} />
-          <MapView center={center} risk={risk} reports={reports} />
-        </main>
-      </div>
+      {view === "counties" ? (
+        <CountyDashboard />
+      ) : (
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+          <Sidebar
+            onSelectLocation={loadLocation}
+            risk={risk}
+            reports={reports}
+            selectedLocation={selectedLocation}
+            loading={loading}
+            loadError={loadError}
+            reportsFailed={reportsFailed}
+            onRetry={retry}
+            online={online}
+            notice={notice}
+            onSubmitReport={handleSubmitReport}
+            open={sidebarOpen}
+            onClose={closeSidebar}
+          />
+          <main className="flex-1 relative">
+            <MapListAlternative location={selectedLocation} risk={risk} reports={reports} />
+            <MapView center={center} risk={risk} reports={reports} />
+          </main>
+        </div>
+      )}
       <footer className="px-4 py-2 text-[11px] leading-snug text-gray-700 bg-amber-50 border-t border-amber-200">
         <strong>Decision support only.</strong> {DECISION_SUPPORT_NOTICE}
       </footer>

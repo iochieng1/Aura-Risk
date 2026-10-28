@@ -252,6 +252,9 @@ func main() {
 		api.POST("/risk", handlers.PostRiskWithWeather)
 		api.GET("/reports", handlers.GetReports)
 		api.POST("/reports", writeLimit, handlers.OptionalAuth(), handlers.CreateReport)
+		api.GET("/stats/counties", handlers.GetCountyStats)
+		api.GET("/open-data/reports.csv", handlers.GetOpenDataReports("csv"))
+		api.GET("/open-data/reports.json", handlers.GetOpenDataReports("json"))
 
 		api.POST("/auth/device", writeLimit, handlers.RegisterDevice)
 		api.POST("/auth/refresh", handlers.RefreshTokens)
