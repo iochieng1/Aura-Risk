@@ -64,6 +64,15 @@ portfolio demo is non-commercial.
   visitor uses their own allowance, and the server still validates and scores
   the data (`POST /api/risk`). The risk card's confidence reasons say when
   this happened.
+  - The device also fetches **ground elevation and GloFAS river discharge**
+    (the same Elevation and Flood API requests the server makes) and sends
+    them along (#69). The server uses them only where it has no data of its
+    own, checks that they are plausible and current, and never caches them.
+    Without this, every demo result left out the low-lying-ground and river
+    terms.
+  - This only fixes the demo. An organisation running AuraRisk needs a paid
+    `OPEN_METEO_API_KEY` anyway (the free API is non-commercial), and with
+    one the server gets all three itself.
 
 - **Sleeping:** the API sleeps after about 15 minutes idle, so the first
   request then takes up to a minute. The web app shows its loading state

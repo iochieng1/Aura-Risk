@@ -71,18 +71,29 @@ describe('createApiClient', () => {
     const weather = { latitude: -0.1, longitude: 34.8, current: {}, hourly: {} };
     const unavailable = () => json({ error: 'weather data is temporarily unavailable' }, 503);
 
-    it('fetches weather on the device and posts it when the server answers 503', async () => {
-      const fetch = jest.fn(async (url: string) => {
-        if (url.startsWith('https://api.open-meteo.com/')) return json(weather);
-        return url.endsWith('/api/risk') ? json(risk) : unavailable();
-      });
+    const elevation = { elevation: [1140, 1150, 1150, 1150, 1150, 1150, 1150, 1150, 1150] };
+    const flood = [{ latitude: -0.075, longitude: 34.775, daily: { time: [], river_discharge: [] } }];
+    const openMeteo = (url: string) => {
+      if (url.startsWith('https://api.open-meteo.com/v1/forecast')) return json(weather);
+      if (url.startsWith('https://api.open-meteo.com/v1/elevation')) return json(elevation);
+      if (url.startsWith('https://flood-api.open-meteo.com/')) return json(flood);
+      return undefined;
+    };
+    const posted = (fetch: jest.Mock) => {
+      const call = fetch.mock.calls.find(([url, init]) => url.includes('/api/risk') && init?.method === 'POST');
+      return call && JSON.parse(call[1].body);
+    };
+
+    it('fetches weather, elevation and river data on the device and posts them when the server answers 503', async () => {
+      const fetch = jest.fn(async (url: string) => openMeteo(url) ?? (url.endsWith('/api/risk') ? json(risk) : unavailable()));
       const client = createApiClient({ baseUrl: 'http://api.test', fetch });
 
       const result = await client.getRisk({ name: 'Kisumu', lat: -0.07, lon: 34.77 });
 
       expect(result.location.name).toBe('Kisumu');
-      const weatherUrl = new URL(fetch.mock.calls[1][0]);
-      expect(Object.fromEntries(weatherUrl.searchParams)).toMatchObject({
+      const urls = fetch.mock.calls.map(([url]) => new URL(url));
+      const forecast = urls.find((u) => u.pathname === '/v1/forecast')!;
+      expect(Object.fromEntries(forecast.searchParams)).toMatchObject({
         latitude: '-0.070000',
         longitude: '34.770000',
         past_days: '7',
@@ -90,32 +101,52 @@ describe('createApiClient', () => {
         hourly: 'precipitation,rain,soil_moisture_0_to_7cm',
         timezone: 'auto',
       });
-      expect(fetch.mock.calls[2]).toEqual([
-        'http://api.test/api/risk',
-        expect.objectContaining({ method: 'POST', body: JSON.stringify({ lat: -0.07, lon: 34.77, weather }) }),
-      ]);
+      // Same points, in the same order, as the backend's neighbourhood().
+      const elevationUrl = urls.find((u) => u.pathname === '/v1/elevation')!;
+      expect(elevationUrl.searchParams.get('latitude')).toBe(
+        '-0.0700,-0.0800,-0.0800,-0.0800,-0.0700,-0.0700,-0.0600,-0.0600,-0.0600'
+      );
+      expect(elevationUrl.searchParams.get('longitude')).toBe(
+        '34.7700,34.7600,34.7700,34.7800,34.7600,34.7800,34.7600,34.7700,34.7800'
+      );
+      const floodUrl = urls.find((u) => u.pathname === '/v1/flood')!;
+      expect(Object.fromEntries(floodUrl.searchParams)).toMatchObject({
+        daily: 'river_discharge',
+        past_days: '92',
+        forecast_days: '7',
+      });
+      expect(floodUrl.searchParams.get('latitude')?.split(',')[1]).toBe('-0.1200');
+      expect(posted(fetch)).toEqual({ lat: -0.07, lon: 34.77, weather, elevation, flood });
+    });
+
+    it('still posts the weather when elevation and river data fail', async () => {
+      const fetch = jest.fn(async (url: string) => {
+        if (url.startsWith('https://api.open-meteo.com/v1/forecast')) return json(weather);
+        if (url.includes('open-meteo.com')) return json({ reason: 'limit' }, 429);
+        return url.endsWith('/api/risk') ? json(risk) : unavailable();
+      });
+      await createApiClient({ baseUrl: 'http://api.test', fetch }).getRisk({ lat: -0.07, lon: 34.77 });
+      expect(posted(fetch)).toEqual({ lat: -0.07, lon: 34.77, weather });
     });
 
     it('keeps the language on the fallback', async () => {
-      const fetch = jest.fn(async (url: string) => {
-        if (url.startsWith('https://api.open-meteo.com/')) return json(weather);
-        return url.includes('/api/risk?lang=') ? json(risk) : unavailable();
-      });
+      const fetch = jest.fn(async (url: string) => openMeteo(url) ?? (url.includes('/api/risk?lang=') ? json(risk) : unavailable()));
       const client = createApiClient({ baseUrl: 'http://api.test', fetch, lang: () => 'sw' });
 
       await client.getRisk({ lat: -0.07, lon: 34.77 });
 
       expect(fetch.mock.calls[0][0]).toBe('http://api.test/api/risk?lat=-0.07&lon=34.77&lang=sw');
-      expect(fetch.mock.calls[2][0]).toBe('http://api.test/api/risk?lang=sw');
+      expect(fetch.mock.calls.at(-1)[0]).toBe('http://api.test/api/risk?lang=sw');
     });
 
     it('throws the server error when the device cannot get weather either', async () => {
       const fetch = jest.fn(async (url: string) =>
-        url.startsWith('https://api.open-meteo.com/') ? json({ reason: 'limit' }, 429) : unavailable()
+        url.includes('open-meteo.com') ? json({ reason: 'limit' }, 429) : unavailable()
       );
       const client = createApiClient({ baseUrl: '', fetch });
       await expect(client.getRisk({ lat: 0, lon: 0 })).rejects.toMatchObject({ status: 503 });
-      expect(fetch).toHaveBeenCalledTimes(2);
+      // The server, then weather, elevation and flood on the device; no POST.
+      expect(fetch).toHaveBeenCalledTimes(4);
     });
 
     it('is skipped for other errors and when disabled', async () => {

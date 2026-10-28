@@ -111,6 +111,7 @@ Build for production with `npm run build`.
 - `GET /health`, `GET /health/live`: liveness. 200 while the process serves HTTP; checks no dependencies, so use it for restarts.
 - `GET /health/ready`: readiness, for load balancers. 503 when the database is unreachable or the instance is shutting down. A suspended weather provider reports `"status": "degraded"` with `checks.weather: "circuit_open"` but stays 200, because cached weather can still be served and every instance shares the provider.
 - `GET /api/risk?lat=<lat>&lon=<lon>`: weather-based risk assessment. Add `lang=sw` (or send `Accept-Language: sw`) for the summary and tips in Swahili; see [I18N.md](I18N.md).
+- `POST /api/risk` `{lat, lon, weather, elevation?, flood?}`: scores Open-Meteo forecast, Elevation and Flood API responses that the client fetched itself, for when `GET` answers 503 because the server can't reach Open-Meteo. Each is checked for plausibility and freshness; elevation and river data only fill gaps in the server's own; nothing is cached or used for alerts.
   `stale: true` means Open-Meteo was failing and cached weather (up to `WEATHER_STALE_MAX` old) was used; with nothing usable the endpoint returns 503 with `Retry-After`. Example:
 
   ```json
