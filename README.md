@@ -151,6 +151,36 @@ The backend was verified to build and run successfully with the database availab
 
 The mobile app picks a location from the device's GPS when the user allows it. If permission is denied, blocked, or location services are off, the user can still search for a place or type coordinates.
 
+### Install the Android app on a phone
+
+The mobile app builds with [EAS](https://docs.expo.dev/build/introduction/). Profiles live in `aurarisk-mobile/eas.json`:
+
+| Profile | Output | Use |
+| --- | --- | --- |
+| `development` | APK with dev client | Load JS from `npx expo start` on your machine |
+| `preview` | Installable APK | Side-load onto a phone; talks to the live API |
+| `production` | AAB | Play Store (see #90) |
+
+Each profile sets `EXPO_PUBLIC_API_BASE_URL` (currently the demo API, `https://aurarisk-api.onrender.com`). The value is inlined at build time. `app.config.ts` fails `preview` and `production` builds if it is missing, not HTTPS, or points at localhost.
+
+One-time setup (from `aurarisk-mobile/`):
+
+```bash
+npm install
+npx eas-cli@latest login
+npx eas-cli@latest init      # links an EAS project; add the printed projectId to app.json if asked
+```
+
+Build and install:
+
+```bash
+npx eas-cli@latest build -p android --profile preview
+```
+
+When the build finishes, open its link or QR code on the phone and download the APK. Allow your browser to install unknown apps, then choose **Install anyway** if Play Protect asks. Before a demo, open `https://aurarisk-api.onrender.com/health` once: the free API sleeps when idle and takes up to a minute to wake (#93).
+
+See [docs/MOBILE_DEPLOYMENT.md](docs/MOBILE_DEPLOYMENT.md) for the dev-build workflow, a demo checklist, and troubleshooting.
+
 ## Contributing
 
 - Every pull request runs CI (`.github/workflows/ci.yml`): Go formatting, vet, and tests (including Postgres integration tests), the mobile typecheck and tests (which cover `packages/shared`), the web build, and the monitoring config checks.
