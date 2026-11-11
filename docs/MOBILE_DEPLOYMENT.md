@@ -26,7 +26,7 @@ Point the app at the **API** URL, not the web one.
 |---|---|---|---|
 | No `eas.json`, no `android.package`, no EAS project ID | Can't build an APK, and push can't get a token | [#79](https://github.com/iochieng1/Aura-Risk/issues/79) | Steps 2–4 below create them |
 | `src/config.ts` falls back to `http://localhost:8080` when `EXPO_PUBLIC_API_BASE_URL` is unset | A build without the variable silently points at the phone itself, and every request fails | [#79](https://github.com/iochieng1/Aura-Risk/issues/79) | Set the variable in the build profile (step 4) |
-| Mobile requests time out after 10 s, but the free API takes up to ~60 s to wake | The first launch after a quiet period shows errors | [#93](https://github.com/iochieng1/Aura-Risk/issues/93) | Wake the API first (smoke test, step 1) |
+| ~~Mobile requests time out after 10 s, but the free API takes up to ~60 s to wake~~ Fixed: the app warms the API on launch and retries for up to 60 s | The first launch after a quiet period is slower and shows a "connecting" banner | [#93](https://github.com/iochieng1/Aura-Risk/issues/93) | Optional: wake the API first (smoke test, step 1) |
 | Photos are off on the demo (no S3/ClamAV); push alerts are off (`NOTIFIER_INTERVAL=0`, no Expo token) | Photo attach fails with 503; no alerts arrive | [#88](https://github.com/iochieng1/Aura-Risk/issues/88), [#82](https://github.com/iochieng1/Aura-Risk/issues/82) | Leave these out of the demo |
 | Queued reports are dropped silently after 3 failed sends | A report with a failing photo can vanish from the queue | [#80](https://github.com/iochieng1/Aura-Risk/issues/80) | Don't attach photos on the demo |
 
@@ -266,7 +266,7 @@ Leave out on the demo:
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Every request fails right after install | Built without `EXPO_PUBLIC_API_BASE_URL`, so it uses `http://localhost:8080` | Check the `env` block of the profile you built; rebuild |
-| Errors on the first launch, fine a minute later | Free API was asleep; the app gives up after 10 s (#93) | Open `https://aurarisk-api.onrender.com/health/ready` first, then select the location again |
+| "Connecting to the AuraRisk server" banner on first launch | Free API was asleep; the app retries for up to 60 s (#93) | Wait. If it still fails after a minute, check `https://aurarisk-api.onrender.com/health/ready` |
 | "Weather unavailable" or confidence notes about device weather | Open-Meteo's free daily limit on Render's shared IP | Expected: the app falls back to fetching weather on the phone |
 | Requests to a `http://` URL fail only in the APK | Android blocks cleartext HTTP in release builds | Use the HTTPS API URL |
 | "App not installed" when updating | Different `android.package` or signing key than the installed copy | Uninstall the old app, or keep the package and EAS keystore unchanged |

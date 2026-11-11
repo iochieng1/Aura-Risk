@@ -177,7 +177,7 @@ Build and install:
 npx eas-cli@latest build -p android --profile preview
 ```
 
-When the build finishes, open its link or QR code on the phone and download the APK. Allow your browser to install unknown apps, then choose **Install anyway** if Play Protect asks. Before a demo, open `https://aurarisk-api.onrender.com/health` once: the free API sleeps when idle and takes up to a minute to wake (#93).
+When the build finishes, open its link or QR code on the phone and download the APK. Allow your browser to install unknown apps, then choose **Install anyway** if Play Protect asks. The free demo API sleeps when idle and takes up to a minute to wake. The app warms it up on launch, shows a "connecting" banner, and retries for up to 60 seconds, so the first load is just slower. Opening `https://aurarisk-api.onrender.com/health` a minute before a demo avoids the wait.
 
 See [docs/MOBILE_DEPLOYMENT.md](docs/MOBILE_DEPLOYMENT.md) for the dev-build workflow, a demo checklist, and troubleshooting.
 

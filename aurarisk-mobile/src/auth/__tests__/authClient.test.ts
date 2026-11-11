@@ -19,6 +19,16 @@ jest.mock('expo-secure-store', () => {
 
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '1.0.0' } } }));
 
+// Keep the real retry behaviour but with a short budget, so transient-failure tests stay fast.
+jest.mock('../../net/fetchWithRetry', () => {
+  const actual = jest.requireActual('../../net/fetchWithRetry');
+  return {
+    ...actual,
+    fetchWithRetry: (url: string, init?: RequestInit) =>
+      actual.fetchWithRetry(url, init, { budgetMs: 100, attemptTimeoutMs: 50, baseDelayMs: 5, maxDelayMs: 20 }),
+  };
+});
+
 const future = (ms: number) => new Date(Date.now() + ms).toISOString();
 const past = () => new Date(Date.now() - 1000).toISOString();
 

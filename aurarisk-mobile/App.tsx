@@ -13,6 +13,9 @@ import { setupNotifications } from './src/notifications/setup';
 import LanguageToggle from './src/components/LanguageToggle';
 import RiskPanel from './src/components/RiskPanel';
 import { I18nProvider, useT } from './src/i18n';
+import { warmUpServer } from './src/config';
+import { fetchWithRetry } from './src/net/fetchWithRetry';
+import { useServerWaking } from './src/net/serverStatus';
 
 export default function App() {
   return (
@@ -27,6 +30,7 @@ function Main() {
   const { pendingCount, isSyncing, refreshPendingCount } = useOfflineSync();
   const [location, setLocation] = useState<Location | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const serverWaking = useServerWaking();
 
   const onReportSubmitted = useCallback(() => {
     refreshPendingCount();
@@ -34,6 +38,7 @@ function Main() {
   }, [refreshPendingCount]);
 
   useEffect(() => {
+    warmUpServer(fetchWithRetry);
     ensureSession().catch((err) => console.warn('Device registration deferred:', err));
     registerBackgroundRefreshAsync().catch((err) => console.warn('Background refresh unavailable:', err));
     return setupNotifications();
@@ -44,6 +49,11 @@ function Main() {
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <LanguageToggle />
+          {serverWaking && (
+            <Text style={styles.banner} accessibilityLiveRegion="polite">
+              {t('mobile.serverWaking')}
+            </Text>
+          )}
           {(pendingCount > 0 || isSyncing) && (
             <Text style={styles.banner}>
               {isSyncing ? t('mobile.sendingQueued') : t('mobile.waiting', { count: pendingCount })}

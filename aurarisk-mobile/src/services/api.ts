@@ -2,14 +2,15 @@ import { ApiError, createApiClient, type FieldErrors, validateNewReport, Validat
 import NetInfo from '@react-native-community/netinfo';
 import { authFetch } from '../auth/authClient';
 import { getLang } from '../i18n';
-import { API_BASE_URL, fetchWithTimeout } from '../config';
+import { API_BASE_URL } from '../config';
+import { fetchWithRetry } from '../net/fetchWithRetry';
 import { uploadReportPhotos } from '../photos/upload';
 import { RiskData, CommunityReport } from '../types/api';
 import { saveRiskToCache, getCachedRisk, saveReportsToCache, getCachedReports } from '../storage/cache';
 import { enqueueReport, NewReport, QueuedReport } from '../storage/reportQueue';
 
 /** Unauthenticated endpoints (risk, nearby reports). */
-export const publicApi = createApiClient({ baseUrl: API_BASE_URL, fetch: fetchWithTimeout, lang: getLang });
+export const publicApi = createApiClient({ baseUrl: API_BASE_URL, fetch: fetchWithRetry, lang: getLang });
 
 // authFetch prefixes API_BASE_URL itself and handles token refresh, so this client sends bare paths.
 const deviceApi = createApiClient({ baseUrl: '', fetch: authFetch });
