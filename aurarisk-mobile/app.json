@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "aurarisk-mobile",
+    "name": "AuraRisk",
     "slug": "aurarisk-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,9 +10,11 @@
       "supportsTablet": true,
       "config": {
         "usesNonExemptEncryption": false
-      }
+      },
+      "bundleIdentifier": "com.aurarisk.app"
     },
     "android": {
+      "package": "com.aurarisk.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -54,6 +56,9 @@
           "locationWhenInUsePermission": "AuraRisk uses your location only when you tap \"Use my location\" to check flood risk or place a report. You can always search or enter coordinates instead."
         }
       ]
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
