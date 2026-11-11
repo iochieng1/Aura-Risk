@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { API_BASE_URL, fetchWithTimeout } from '../config';
+import { API_BASE_URL } from '../config';
+import { fetchWithRetry } from '../net/fetchWithRetry';
 import { TokenPair } from '../types/api';
 import { clearSession, loadSession, saveSession } from './tokenStore';
 
@@ -65,7 +66,7 @@ const parseTokenPair = async (response: Response): Promise<TokenPair> => {
 const registerDevice = (): Promise<TokenPair> => {
   if (inFlightRegister) return inFlightRegister;
   inFlightRegister = (async () => {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/api/auth/device`, {
+    const response = await fetchWithRetry(`${API_BASE_URL}/api/auth/device`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -107,7 +108,7 @@ export const refreshSession = (): Promise<TokenPair> => {
     const current = await readSession();
     if (!current || isExpired(current.refresh_expires_at)) return resetAndRegister();
 
-    const response = await fetchWithTimeout(`${API_BASE_URL}/api/auth/refresh`, {
+    const response = await fetchWithRetry(`${API_BASE_URL}/api/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: current.refresh_token }),
@@ -144,7 +145,7 @@ export const authFetch = async (path: string, init: RequestInit = {}): Promise<R
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${token}`);
     if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-    return fetchWithTimeout(`${API_BASE_URL}${path}`, { ...init, headers });
+    return fetchWithRetry(`${API_BASE_URL}${path}`, { ...init, headers });
   };
 
   const response = await send(await getAccessToken());
@@ -164,7 +165,7 @@ export const logout = async (): Promise<void> => {
   const session = await readSession();
   if (session) {
     try {
-      await fetchWithTimeout(`${API_BASE_URL}/api/auth/logout`, {
+      await fetchWithRetry(`${API_BASE_URL}/api/auth/logout`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}` },
       });

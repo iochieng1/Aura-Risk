@@ -181,6 +181,7 @@ const en = {
 
   // Mobile
   'mobile.sendingQueued': 'Sending queued reports…',
+  'mobile.serverWaking': 'Connecting to the AuraRisk server. This can take up to a minute after a quiet period…',
   'mobile.waiting': '{count} report(s) waiting to be sent',
   'mobile.location': 'Location',
   'mobile.noLocation': 'No location selected yet.',
@@ -423,6 +424,7 @@ const sw: Record<MessageKey, string> = {
   'dash.downloadJson': 'Pakua JSON',
 
   'mobile.sendingQueued': 'Inatuma ripoti zilizosubiri…',
+  'mobile.serverWaking': 'Inaunganisha na seva ya AuraRisk. Hii inaweza kuchukua hadi dakika moja baada ya muda wa utulivu…',
   'mobile.waiting': 'Ripoti {count} zinasubiri kutumwa',
   'mobile.location': 'Eneo',
   'mobile.noLocation': 'Bado hujachagua eneo.',
