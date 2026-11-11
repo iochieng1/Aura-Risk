@@ -59,6 +59,12 @@
     ],
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9a560a46-f324-47a7-8690-9ffb094dfaaa"
+      }
+    },
+    "owner": "iochieng1"
   }
 }
