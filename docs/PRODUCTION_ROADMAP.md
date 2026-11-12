@@ -34,7 +34,7 @@ Verified reports are routed to county responders and published as open data.
 | Data | Open-Meteo forecast, archive (ERA5), elevation (Copernicus DEM) and flood (GloFAS) APIs; Nominatim geocoding | All real; free tier is non-commercial only |
 | Channels | Africa's Talking SMS + USSD, Expo push | Implemented; push off in the demo |
 | Ops | Docker image per commit on GHCR, Caddy HTTPS compose, Prometheus/Alertmanager/Grafana/Loki, runbooks, restore drill | Built; only the free Render + Neon demo is running |
-| CI | GitHub Actions: gofmt, vet, race tests on PostGIS, govulncheck, mobile typecheck + Jest, web build, monitoring/Caddy/compose/shellcheck validation | Green and required on `main` |
+| CI | GitHub Actions: gofmt, vet, race tests on PostGIS, govulncheck, npm audit, gitleaks, mobile typecheck + Jest, web build, monitoring/Caddy/compose/shellcheck validation | Green and required on `main` |
 
 ### What genuinely works today
 
@@ -105,11 +105,17 @@ Verified reports are routed to county responders and published as open data.
   supported.
 - **History:** before #15 (commit `44a8982`, 2026-10-05) `docker-compose.yml`
   contained literal local-development passwords for Postgres and the object
-  store. They remain in git history. They were dev-only defaults, but make
-  sure none of them is reused for the demo database (Neon) or any real
-  service.
-- GitHub secret scanning and push protection are on. **Dependabot security
-  updates are off**, and there is no secret scanner in CI.
+  store. They remain in git history. All of them are on the backend's
+  `devSecretValues` deny-list, so with `APP_ENV=production` the API refuses
+  to start if `DATABASE_URL` or the storage keys use one; the demo API starts
+  and reports its database healthy, so it doesn't use them (checked for #87).
+  Don't reuse them for any other service either.
+- GitHub secret scanning and push protection are on. Dependabot alerts and
+  security updates are on, with weekly grouped version updates for Go, the
+  three npm projects and GitHub Actions (`.github/dependabot.yml`). CI fails
+  on a high or critical `npm audit` advisory in web or mobile production
+  dependencies, on a reachable Go vulnerability (`govulncheck`), and on a
+  secret in a commit (gitleaks). Actions are pinned to commit SHAs.
 
 ### Deployment readiness
 
