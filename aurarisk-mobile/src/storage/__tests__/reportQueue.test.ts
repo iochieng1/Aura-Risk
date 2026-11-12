@@ -110,6 +110,16 @@ describe('Mobile Report Queue Storage', () => {
     expect(await AsyncStorage.getItem(CORRUPT_QUEUE_KEY)).toBe('[{"tempId": "x", ');
   });
 
+  it('keeps a copy of a stored queue that is valid JSON but not a list', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    await AsyncStorage.setItem('@aurarisk/offline_reports_queue', '{"tempId": "x"}');
+
+    expect(await getReportQueue()).toEqual([]);
+    await enqueueReport(report);
+
+    expect(await AsyncStorage.getItem(CORRUPT_QUEUE_KEY)).toBe('{"tempId": "x"}');
+  });
+
   it('backs off exponentially, capped at an hour', () => {
     expect([1, 2, 3, 4, 5, 6, 7, 8, 20].map(backoffDelayMs)).toEqual([
       30_000, 60_000, 120_000, 240_000, 480_000, 960_000, 1_920_000, RETRY_MAX_DELAY_MS, RETRY_MAX_DELAY_MS,

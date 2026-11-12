@@ -73,12 +73,15 @@ const readQueue = async (): Promise<QueuedReport[]> => {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // Keep the unreadable copy: the next write would otherwise destroy the only record of these reports.
+    parsed = undefined;
+  }
+  if (!Array.isArray(parsed)) {
+    // Unparseable, or valid JSON that isn't a list. Keep a copy: the next write would otherwise
+    // destroy the only record of these reports.
     console.error(`Report queue is unreadable; a copy is kept under ${CORRUPT_QUEUE_KEY}`);
     await AsyncStorage.setItem(CORRUPT_QUEUE_KEY, raw).catch(() => undefined);
     return [];
   }
-  if (!Array.isArray(parsed)) return [];
   return parsed.map(normalize).filter((item): item is QueuedReport => item !== null);
 };
 
