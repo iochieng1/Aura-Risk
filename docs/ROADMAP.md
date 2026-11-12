@@ -239,7 +239,7 @@ Found during this assessment. Each is worth an issue, so nothing is forgotten.
 | **`GET /api/risk` range check** | Unlike `POST /api/risk`, it doesn't reject latitude/longitude outside ±90/±180 | S |
 | **Location names** | The backend doesn't geocode, so the risk summary always says "Flood risk for Selected Location…". The shared client replaces `location.name`, but not the summary text the card shows | S |
 | ~~**Default map centre**~~ | Done: Kisumu, configurable with `VITE_DEFAULT_CENTER` (#56) | — |
-| **Mobile follow-ups** (from the #31/#32 review) | Queued reports are dropped **silently** after 3 failed retries; the offline cache is never evicted; no tests for the cache, push setup, background refresh or photo upload | M |
+| **Mobile follow-ups** (from the #31/#32 review) | ~~Queued reports are dropped silently; the offline cache is never evicted~~ fixed in #80, with tests for the cache and photo storage. Still no tests for push setup, background refresh or photo upload | M |
 | **Client-weather trust** | The device-weather fallback validates data but can't prove it's genuine. That's fine because it only affects the caller's own result. Keep it that way: never cache it, alert from it, or store it | — |
 
 ## Kenya pilot work

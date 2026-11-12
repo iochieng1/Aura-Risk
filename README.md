@@ -26,7 +26,7 @@ _Hosted on free tiers (Render + Neon): the first request after a quiet period ca
   - XSS-safe rendering
 - **Accessible web app (React):** loading, empty, error and offline states; data freshness; and a screen-reader list alternative to the map.
 - **Offline-first mobile app (Expo):**
-  - cached risk data and a retry queue for reports
+  - cached risk data and a retry queue for reports that never drops one silently, with [size limits](docs/MOBILE_PHASE3.md#offline-storage-limits)
   - push alerts with consent and quiet hours
   - secure token storage
   - scanned photo uploads

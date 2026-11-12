@@ -28,7 +28,7 @@ Point the app at the **API** URL, not the web one.
 | `src/config.ts` falls back to `http://localhost:8080` when `EXPO_PUBLIC_API_BASE_URL` is unset | A build without the variable silently points at the phone itself, and every request fails | [#79](https://github.com/iochieng1/Aura-Risk/issues/79) | Set the variable in the build profile (step 4) |
 | ~~Mobile requests time out after 10 s, but the free API takes up to ~60 s to wake~~ Fixed: the app warms the API on launch and retries for up to 60 s | The first launch after a quiet period is slower and shows a "connecting" banner | [#93](https://github.com/iochieng1/Aura-Risk/issues/93) | Optional: wake the API first (smoke test, step 1) |
 | Photos are off on the demo (no S3/ClamAV); push alerts are off (`NOTIFIER_INTERVAL=0`, no Expo token) | Photo attach fails with 503; no alerts arrive | [#88](https://github.com/iochieng1/Aura-Risk/issues/88), [#82](https://github.com/iochieng1/Aura-Risk/issues/82) | Leave these out of the demo |
-| Queued reports are dropped silently after 3 failed sends | A report with a failing photo can vanish from the queue | [#80](https://github.com/iochieng1/Aura-Risk/issues/80) | Don't attach photos on the demo |
+| ~~Queued reports are dropped silently after 3 failed sends~~ Fixed: reports stay queued until sent or discarded; rejected ones show the server's reason with Retry, Edit and Discard | A rejected report shows as "not sent" | [#80](https://github.com/iochieng1/Aura-Risk/issues/80) | — |
 
 Things that are **not** blockers:
 - **CORS:** it only applies to browsers, so the native app is unaffected.
@@ -250,7 +250,9 @@ Features that work against the demo API:
 - [ ] **Offline**: turn on aeroplane mode, then
   - the cached risk still shows, marked stale;
   - submitting a report queues it, with a "waiting to send" banner;
-  - turning aeroplane mode off sends it automatically.
+  - turning aeroplane mode off sends it automatically;
+  - a report the server rejects stays listed as "not sent" with the reason,
+    and can be retried, edited or discarded.
 - [ ] **Push consent flow**: the in-app explanation, then the OS permission
       prompt. Alerts won't arrive on the demo (notifier off, #82).
 - [ ] **Privacy**: location is only requested when you tap *Use my location*; search and typed coordinates work without it. (Account deletion exists in the API and auth client, but there is no button for it in the app yet.)

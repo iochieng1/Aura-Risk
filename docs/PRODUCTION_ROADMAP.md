@@ -73,9 +73,10 @@ Verified reports are routed to county responders and published as open data.
   push requires an EAS project ID and a development build. It is one
   scrolling screen with no map, although `aurarisk-mobile/AGENTS.md` says to
   use Expo Router.
-- **The mobile retry queue drops reports silently** after 3 failed attempts
-  (`src/sync/flushReportQueue.ts`), and the photo/offline cache has no
-  eviction beyond a 24 h staleness check.
+- ~~**The mobile retry queue drops reports silently**~~ Fixed (#80): reports
+  stay queued until sent or discarded, with backoff between retries, and the
+  offline cache and photo storage have documented limits
+  ([MOBILE_PHASE3.md](MOBILE_PHASE3.md#offline-storage-limits)).
 - **The web app is not installable:** no manifest, no service worker, and
   `index.html` points at a `/vite.svg` favicon that doesn't exist.
 - **Location names:** the API always calls the place "Selected Location", so
@@ -136,7 +137,7 @@ tracked in #27.
 2. **Risk score not calibrated** (#22): wet-season false alarms are too high
    for a warning product.
 3. **No production hosting** (#27): demo sleeps; no paid weather licence.
-4. **Silent data loss** in the mobile report queue.
+4. ~~**Silent data loss** in the mobile report queue.~~ Fixed (#80).
 
 ### P1: needed for a credible pilot
 

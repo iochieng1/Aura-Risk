@@ -65,7 +65,20 @@ export const fetchNearbyReports = async (lat: number, lon: number, radius = 10):
   }
 };
 
-export class ReportRejectedError extends Error {}
+/** The server (or local validation) refused the report; sending it again unchanged won't help. */
+export class ReportRejectedError extends Error {
+  constructor(
+    message: string,
+    /** HTTP status when the server rejected it; unset for local validation. */
+    readonly status?: number
+  ) {
+    super(message);
+  }
+}
+
+/** 4xx means the request itself is wrong, except auth (401, refreshed by authFetch), timeout (408) and rate limiting (429). */
+export const isPermanentRejection = (status: number): boolean =>
+  status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
 
 /** The report failed local validation; `errors` is keyed by field (name, lat, lon, category, note). */
 export class ReportValidationError extends ReportRejectedError {
@@ -84,11 +97,9 @@ export const createReport = async (report: NewReport): Promise<string> => {
     });
     return created.id;
   } catch (err) {
-    // Invalid input, or a 4xx (other than auth/rate limiting), means retrying won't help.
+    // Invalid input, or a permanent 4xx, means retrying won't help. Anything else is transient.
     if (err instanceof ValidationError) throw new ReportRejectedError(err.message);
-    if (err instanceof ApiError && err.status >= 400 && err.status < 500 && err.status !== 401 && err.status !== 429) {
-      throw new ReportRejectedError(err.message);
-    }
+    if (err instanceof ApiError && isPermanentRejection(err.status)) throw new ReportRejectedError(err.message, err.status);
     throw err;
   }
 };

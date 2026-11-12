@@ -41,7 +41,9 @@ export default function ReportComposer({ location, onSubmitted }: Props) {
       onSubmitted?.();
     } catch (err) {
       if (err instanceof ReportValidationError) setStatus(err.message);
-      else setStatus(err instanceof ReportRejectedError ? t('mobile.rejected') : t('mobile.sendFailed'));
+      // Show the server's reason; the form keeps what was typed so it can be corrected.
+      else if (err instanceof ReportRejectedError) setStatus(err.message ? `${t('mobile.rejected')} ${err.message}` : t('mobile.rejected'));
+      else setStatus(t('mobile.sendFailed'));
     } finally {
       setSubmitting(false);
     }
