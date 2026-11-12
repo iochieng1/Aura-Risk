@@ -24,6 +24,7 @@ const (
 	ProviderExpoPush  = "expo_push"
 	ProviderS3        = "s3"
 	ProviderClamAV    = "clamav"
+	ProviderNominatim = "nominatim"
 )
 
 const (
@@ -77,6 +78,11 @@ var (
 	weatherLookups = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "aurarisk_weather_lookups_total",
 		Help: "Weather lookups by how they were served: hit, fetched, stale, throttled, unavailable.",
+	}, []string{"result"})
+
+	geocodeLookups = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "aurarisk_geocode_lookups_total",
+		Help: "Reverse geocoding lookups by result: hit, fetched, throttled, rate_limited, failed.",
 	}, []string{"result"})
 
 	circuitOpen = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -217,6 +223,11 @@ func AddRetentionDeleted(kind, reason string, n int) {
 // ObserveWeatherLookup records how a weather lookup was served.
 func ObserveWeatherLookup(result string) {
 	weatherLookups.WithLabelValues(result).Inc()
+}
+
+// ObserveGeocodeLookup records how a reverse geocoding lookup was served.
+func ObserveGeocodeLookup(result string) {
+	geocodeLookups.WithLabelValues(result).Inc()
 }
 
 func SetCircuitOpen(provider string, open bool) {

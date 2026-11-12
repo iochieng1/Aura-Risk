@@ -4,7 +4,7 @@ const json = (body: unknown, status = 200) =>
   ({ ok: status >= 200 && status < 300, status, json: async () => body }) as Response;
 
 const risk = {
-  location: { name: 'Selected Location', lat: -1.29, lon: 36.82 },
+  location: { name: '-1.2900, 36.8200', lat: -1.29, lon: 36.82 },
   score: 62,
   level: 'Alert',
   summary: 'Heavy rain expected',
@@ -12,15 +12,31 @@ const risk = {
 };
 
 describe('createApiClient', () => {
-  it('builds risk URLs from the base URL and keeps the caller’s place name', async () => {
+  it('builds risk URLs from the base URL and sends and keeps the caller’s place name', async () => {
     const fetch = jest.fn(async () => json(risk));
     const client = createApiClient({ baseUrl: 'http://api.test/', fetch });
 
     const result = await client.getRisk({ name: 'Nairobi', lat: -1.29, lon: 36.82 });
 
-    expect(fetch).toHaveBeenCalledWith('http://api.test/api/risk?lat=-1.29&lon=36.82', undefined);
+    expect(fetch).toHaveBeenCalledWith('http://api.test/api/risk?lat=-1.29&lon=36.82&name=Nairobi', undefined);
     expect(result.location.name).toBe('Nairobi');
     expect(result.level).toBe('Alert');
+
+    await client.getRisk({ lat: -1.29, lon: 36.82 });
+    expect(fetch).toHaveBeenLastCalledWith('http://api.test/api/risk?lat=-1.29&lon=36.82', undefined);
+  });
+
+  it('cleans the place name to pass the server’s checks', async () => {
+    const fetch = jest.fn(async (_url: string) => json(risk));
+    const client = createApiClient({ baseUrl: '', fetch });
+    const sent = async (name: string) => {
+      await client.getRisk({ name, lat: 0, lon: 0 });
+      return new URL(fetch.mock.calls.at(-1)[0], 'http://x').searchParams.get('name');
+    };
+
+    expect(await sent(' Kibera\u202e\n ')).toBe('Kibera');
+    expect(await sent('é'.repeat(150))).toBe('é'.repeat(100));
+    expect(await sent('   ')).toBeNull();
   });
 
   it('surfaces the backend error message and status', async () => {
@@ -116,7 +132,7 @@ describe('createApiClient', () => {
         forecast_days: '7',
       });
       expect(floodUrl.searchParams.get('latitude')?.split(',')[1]).toBe('-0.1200');
-      expect(posted(fetch)).toEqual({ lat: -0.07, lon: 34.77, weather, elevation, flood });
+      expect(posted(fetch)).toEqual({ lat: -0.07, lon: 34.77, name: 'Kisumu', weather, elevation, flood });
     });
 
     it('still posts the weather when elevation and river data fail', async () => {

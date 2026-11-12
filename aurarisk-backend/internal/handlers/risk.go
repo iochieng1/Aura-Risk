@@ -31,8 +31,18 @@ func GetRisk(c *gin.Context) {
 		respondError(c, http.StatusBadRequest, "invalid lon")
 		return
 	}
+	if msg := checkCoordinates(lat, lon); msg != "" {
+		respondError(c, http.StatusBadRequest, msg)
+		return
+	}
 
-	locationName := "Selected Location"
+	// A client that knows the place (a search result) names it; otherwise
+	// the point is reverse-geocoded, or named by its coordinates.
+	locationName, err := services.ValidatePlaceName(c.Query("name"))
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	risk, err := services.GenerateRiskAssessment(c.Request.Context(), lat, lon, locationName)
 	if errors.Is(err, services.ErrWeatherUnavailable) {
@@ -46,6 +56,18 @@ func GetRisk(c *gin.Context) {
 	}
 
 	respondRisk(c, risk)
+}
+
+// checkCoordinates returns an error message for a point off the globe. The
+// comparisons also reject NaN, which strconv.ParseFloat accepts.
+func checkCoordinates(lat, lon float64) string {
+	if !(lat >= -90 && lat <= 90) {
+		return "lat must be between -90 and 90"
+	}
+	if !(lon >= -180 && lon <= 180) {
+		return "lon must be between -180 and 180"
+	}
+	return ""
 }
 
 // respondRisk sends an assessment with its summary and tips in the caller's
@@ -62,6 +84,7 @@ func respondRisk(c *gin.Context, risk *models.RiskAssessment) {
 type clientWeatherRiskRequest struct {
 	Lat     *float64                    `json:"lat"`
 	Lon     *float64                    `json:"lon"`
+	Name    string                      `json:"name"` // optional, as in GET
 	Weather *services.OpenMeteoResponse `json:"weather"`
 	// Optional Elevation and Flood API responses fetched by the client too,
 	// used only where the server has no data of its own (#69).
@@ -78,12 +101,17 @@ func PostRiskWithWeather(c *gin.Context) {
 		badRequestBody(c, err)
 		return
 	}
-	if req.Lat == nil || *req.Lat < -90 || *req.Lat > 90 {
-		respondError(c, http.StatusBadRequest, "lat must be between -90 and 90")
+	if req.Lat == nil || req.Lon == nil {
+		respondError(c, http.StatusBadRequest, "lat and lon are required")
 		return
 	}
-	if req.Lon == nil || *req.Lon < -180 || *req.Lon > 180 {
-		respondError(c, http.StatusBadRequest, "lon must be between -180 and 180")
+	if msg := checkCoordinates(*req.Lat, *req.Lon); msg != "" {
+		respondError(c, http.StatusBadRequest, msg)
+		return
+	}
+	locationName, err := services.ValidatePlaceName(req.Name)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	now := time.Now()
@@ -104,5 +132,5 @@ func PostRiskWithWeather(c *gin.Context) {
 	}
 	client := services.Hydrology{Terrain: terrain, River: river}
 
-	respondRisk(c, services.AssessClientWeather(c.Request.Context(), *req.Lat, *req.Lon, "Selected Location", req.Weather, client, now))
+	respondRisk(c, services.AssessClientWeather(c.Request.Context(), *req.Lat, *req.Lon, locationName, req.Weather, client, now))
 }

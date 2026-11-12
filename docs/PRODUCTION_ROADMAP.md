@@ -78,8 +78,8 @@ Verified reports are routed to county responders and published as open data.
   eviction beyond a 24 h staleness check.
 - **The web app is not installable:** no manifest, no service worker, and
   `index.html` points at a `/vite.svg` favicon that doesn't exist.
-- **Location names:** the API always calls the place "Selected Location", so
-  summaries read "Flood risk for Selected Location…".
+- ~~**Location names:**~~ done (#85): summaries use the client's place name,
+  else a reverse-geocoded one (Nominatim), else the coordinates.
 - **Demo limits:** photos and push are off (free tiers can't run ClamAV or
   hold an Expo token), moderation tokens are unset, and the free API sleeps,
   so the first request can take up to a minute.

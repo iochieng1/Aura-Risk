@@ -236,8 +236,8 @@ Found during this assessment. Each is worth an issue, so nothing is forgotten.
 | ~~Open-Meteo attribution in the UI~~ | Done: the web and mobile risk views credit Open-Meteo (CC BY 4.0) | — |
 | **Check `client_ip` on Render** | Confirm `TRUSTED_PROXIES` applied, so visitors don't share one rate limit | S |
 | **Moderation on the demo** | `MODERATOR_TOKENS` is unset, so the moderation API is off and test reports can't be removed through the API | S |
-| **`GET /api/risk` range check** | Unlike `POST /api/risk`, it doesn't reject latitude/longitude outside ±90/±180 | S |
-| **Location names** | The backend doesn't geocode, so the risk summary always says "Flood risk for Selected Location…". The shared client replaces `location.name`, but not the summary text the card shows | S |
+| ~~**`GET /api/risk` range check**~~ | Done (#85): latitude/longitude outside ±90/±180 get a 400, as on `POST` | — |
+| ~~**Location names**~~ | Done (#85): clients pass the place `name`; otherwise the backend reverse-geocodes with Nominatim (cached, 1 request/s), falling back to coordinates | — |
 | ~~**Default map centre**~~ | Done: Kisumu, configurable with `VITE_DEFAULT_CENTER` (#56) | — |
 | **Mobile follow-ups** (from the #31/#32 review) | Queued reports are dropped **silently** after 3 failed retries; the offline cache is never evicted; no tests for the cache, push setup, background refresh or photo upload | M |
 | **Client-weather trust** | The device-weather fallback validates data but can't prove it's genuine. That's fine because it only affects the caller's own result. Keep it that way: never cache it, alert from it, or store it | — |

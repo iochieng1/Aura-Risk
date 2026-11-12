@@ -60,9 +60,10 @@ export class MalformedResponseError extends Error {
 
 export interface ApiClient {
   /**
-   * GET /api/risk. When `at` has a name it replaces the server's placeholder
-   * ("Selected Location"), since the backend does not geocode. Falls back
-   * to device-fetched weather on a 503 (see `weatherFallback`).
+   * GET /api/risk. When `at` has a name it is sent (trimmed to the server's
+   * 100-character limit) so the summary uses it; otherwise the server names
+   * the place itself. Falls back to device-fetched weather on a 503 (see
+   * `weatherFallback`).
    */
   getRisk(at: Coordinates | Location): Promise<RiskAssessment>;
   /** GET /api/reports. Newest first, at most 50. */
@@ -126,7 +127,22 @@ export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = t
     }
   };
 
-  const riskFromDeviceWeather = async ({ lat, lon }: Coordinates, serverError: ApiError): Promise<unknown> => {
+  // The place name, if any, cleaned to pass the server's checks so a long
+  // search result can't turn into a 400.
+  const nameQuery = (name: string | undefined) => {
+    if (!name) return '';
+    try {
+      return `&name=${encodeURIComponent(name)}`;
+    } catch {
+      return ''; // lone surrogate
+    }
+  };
+
+  const riskFromDeviceWeather = async (
+    { lat, lon }: Coordinates,
+    name: string | undefined,
+    serverError: ApiError
+  ): Promise<unknown> => {
     const [weather, elevation, flood] = await Promise.all([
       (async () => {
         try {
@@ -145,18 +161,19 @@ export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = t
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // The Flood API returns one object per cell for several locations.
-      body: JSON.stringify({ lat, lon, weather, elevation, flood: Array.isArray(flood) ? flood : undefined }),
+      body: JSON.stringify({ lat, lon, name, weather, elevation, flood: Array.isArray(flood) ? flood : undefined }),
     });
   };
 
   return {
     async getRisk(at) {
+      const placeName = 'name' in at ? cleanPlaceName(at.name) : undefined;
       let body: unknown;
       try {
-        body = await request(`/api/risk?${coordQuery(at)}${langQuery('&')}`);
+        body = await request(`/api/risk?${coordQuery(at)}${nameQuery(placeName)}${langQuery('&')}`);
       } catch (err) {
         if (!weatherFallback || !(err instanceof ApiError) || err.status !== 503) throw err;
-        body = await riskFromDeviceWeather(at, err);
+        body = await riskFromDeviceWeather(at, placeName, err);
       }
       if (!isRiskAssessment(body)) throw new MalformedResponseError('risk');
       const name = 'name' in at && at.name ? at.name : body.location.name;
@@ -194,6 +211,27 @@ export function createApiClient({ baseUrl, fetch: fetchImpl, weatherFallback = t
     },
   };
 }
+
+/** The backend's limit on a place name (services.MaxPlaceNameRunes), in code points. */
+const MAX_PLACE_NAME_LENGTH = 100;
+
+// Control and bidirectional formatting characters, which the backend rejects.
+const isControl = (c: number) =>
+  c < 0x20 ||
+  (c >= 0x7f && c <= 0x9f) ||
+  c === 0x061c ||
+  c === 0x200e ||
+  c === 0x200f ||
+  (c >= 0x202a && c <= 0x202e) ||
+  (c >= 0x2066 && c <= 0x2069);
+
+/** Makes a place name acceptable to GET/POST /api/risk, or undefined if nothing is left. */
+const cleanPlaceName = (name: unknown): string | undefined => {
+  if (typeof name !== 'string') return undefined;
+  const chars = Array.from(name).map((ch) => (isControl(ch.codePointAt(0) ?? 0) ? ' ' : ch));
+  const cleaned = Array.from(chars.join('').trim()).slice(0, MAX_PLACE_NAME_LENGTH).join('').trim();
+  return cleaned || undefined;
+};
 
 const periodQuery = (params: Record<string, string | undefined>): string => {
   const query = Object.entries(params)

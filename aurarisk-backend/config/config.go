@@ -103,6 +103,12 @@ func Validate() error {
 		problems = append(problems, "AT_USERNAME and AT_API_KEY must be set together")
 	}
 
+	if raw := GetEnv("NOMINATIM_URL", ""); raw != "" {
+		if u, err := url.Parse(raw); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			problems = append(problems, fmt.Sprintf("NOMINATIM_URL %q must be an http(s) URL", raw))
+		}
+	}
+
 	if err := logging.CheckFormat(LogFormat()); err != nil {
 		problems = append(problems, err.Error())
 	}

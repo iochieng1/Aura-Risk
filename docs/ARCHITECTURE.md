@@ -110,13 +110,14 @@ Build for production with `npm run build`.
 
 - `GET /health`, `GET /health/live`: liveness. 200 while the process serves HTTP; checks no dependencies, so use it for restarts.
 - `GET /health/ready`: readiness, for load balancers. 503 when the database is unreachable or the instance is shutting down. A suspended weather provider reports `"status": "degraded"` with `checks.weather: "circuit_open"` but stays 200, because cached weather can still be served and every instance shares the provider.
-- `GET /api/risk?lat=<lat>&lon=<lon>`: weather-based risk assessment. Add `lang=sw` (or send `Accept-Language: sw`) for the summary and tips in Swahili; see [I18N.md](I18N.md).
-- `POST /api/risk` `{lat, lon, weather, elevation?, flood?}`: scores Open-Meteo forecast, Elevation and Flood API responses that the client fetched itself, for when `GET` answers 503 because the server can't reach Open-Meteo. Each is checked for plausibility and freshness; elevation and river data only fill gaps in the server's own; nothing is cached or used for alerts.
+- `GET /api/risk?lat=<lat>&lon=<lon>`: weather-based risk assessment. `lat` must be within ±90 and `lon` within ±180 (400 otherwise). Add `lang=sw` (or send `Accept-Language: sw`) for the summary and tips in Swahili; see [I18N.md](I18N.md).
+  The summary names the place. Clients that know it (a search result) pass `name=<place>` (trimmed, at most 100 characters, no control characters; 400 otherwise); it is only displayed. Otherwise the backend reverse-geocodes the point with OpenStreetMap Nominatim (cached per ~2 km grid cell, at most one request per second per instance, identifying User-Agent), and when that fails or is throttled the place is named by its coordinates, e.g. `-1.2921, 36.8219`. Geocoding never fails a request. Settings: `GEOCODING_ENABLED`, `NOMINATIM_URL`, `NOMINATIM_CONTACT`, `GEOCODING_CACHE_TTL` (see `.env.example`).
+- `POST /api/risk` `{lat, lon, name?, weather, elevation?, flood?}`: scores Open-Meteo forecast, Elevation and Flood API responses that the client fetched itself, for when `GET` answers 503 because the server can't reach Open-Meteo. Each is checked for plausibility and freshness; elevation and river data only fill gaps in the server's own; nothing is cached or used for alerts.
   `stale: true` means Open-Meteo was failing and cached weather (up to `WEATHER_STALE_MAX` old) was used; with nothing usable the endpoint returns 503 with `Retry-After`. Example:
 
   ```json
   {
-    "location": { "name": "Selected Location", "lat": -1.29, "lon": 36.82 },
+    "location": { "name": "Nairobi Central, Nairobi", "lat": -1.29, "lon": 36.82 },
     "score": 42, "level": "Advisory", "summary": "…", "tips": ["…"],
     "stale": false,
     "source_timestamps": { "weather_fetched_at": "2026-10-07T12:01:05Z", "weather_observed_at": "2026-10-07T12:00:00Z" },

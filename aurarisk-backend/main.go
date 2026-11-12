@@ -100,6 +100,21 @@ func main() {
 	}))
 	// Ground elevation and river discharge for the score (#57).
 	services.SetHydrologyService(services.NewHydrologyService(openMeteo, services.HydrologyConfig{}))
+	// Place names for risk summaries when the client sends none (#85), from
+	// OpenStreetMap Nominatim: at most one request per second per instance,
+	// cached per grid cell, with an identifying User-Agent. Failures fall
+	// back to coordinates. GEOCODING_ENABLED=false names points by their
+	// coordinates only.
+	if config.GetBool("GEOCODING_ENABLED", true) {
+		services.SetGeocodeService(services.NewGeocodeService(&services.NominatimClient{
+			URL:       config.GetEnv("NOMINATIM_URL", services.NominatimDefaultURL),
+			UserAgent: services.NominatimUserAgent(config.GetEnv("NOMINATIM_CONTACT", "")),
+		}, services.GeocodeConfig{
+			CacheFor: config.GetDuration("GEOCODING_CACHE_TTL", 7*24*time.Hour),
+		}))
+	} else {
+		log.Println("⚠️ GEOCODING_ENABLED=false: risk summaries name unnamed points by their coordinates")
+	}
 	if openMeteo.APIKey == "" && config.IsProduction() {
 		log.Println("⚠️ OPEN_METEO_API_KEY is not set: using the free Open-Meteo API, which is for non-commercial use only")
 	}
