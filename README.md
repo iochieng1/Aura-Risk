@@ -30,7 +30,7 @@ _Hosted on free tiers (Render + Neon): the first request after a quiet period ca
   - push alerts with consent and quiet hours
   - secure token storage
   - scanned photo uploads
-- **CI on every PR:** formatting, vet, race-detector tests with Postgres, mobile and web builds, monitoring config checks, and dependency scans.
+- **CI on every PR:** formatting, vet, race-detector tests with Postgres, mobile and web builds, monitoring config checks, dependency scans (`govulncheck`, `npm audit`, Dependabot) and secret scanning (gitleaks).
 
 ## Architecture
 
