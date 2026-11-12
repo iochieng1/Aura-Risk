@@ -151,6 +151,44 @@ app standby buckets). Each run is short and does two things: it flushes the
 offline report queue and refreshes cached risk for subscribed locations. It
 skips network work when Low Power Mode is on.
 
+## Offline report queue
+
+Reports that can't be sent right away are queued on the device
+(`aurarisk-mobile/src/storage/reportQueue.ts`) and sent by
+`src/sync/flushReportQueue.ts` when the app is online, from the app and from
+the background task. A queued report is removed only when it has been sent or
+the user discards it.
+
+- **Transient failures** (no network, timeout, 5xx, 408, 429, a photo upload
+  that can be retried): the report stays *pending* and is tried again after
+  30 s, 1, 2, 4, 8, 16 and 32 minutes, then every hour, until it is sent. A
+  `Retry-After` from the server is honoured when it is longer. There is no
+  attempt limit. A POST that timed out is not resent within the same request
+  (`src/net/fetchWithRetry.ts`), so the next attempt may create a duplicate
+  report; that is preferred to losing it.
+- **Rejections** (any other 4xx): the report becomes *not sent* with the
+  server's reason, and is never retried automatically. The user can retry it,
+  edit its category and note, or discard it (which also deletes its photos).
+- The banner counts come from the queue itself: *waiting to be sent* is the
+  pending reports, *not sent* the rejected ones.
+- Items written by older app versions (with `retryCount`) are migrated when
+  read. An unreadable queue is copied to
+  `@aurarisk/offline_reports_queue_corrupt` before anything overwrites it.
+
+## Offline storage limits
+
+| What | Limit | Where | When full |
+|---|---|---|---|
+| Cached risk and nearby reports (AsyncStorage) | 40 entries and 2 MB of JSON in total | `src/storage/cache.ts` (`MAX_CACHE_ENTRIES`, `MAX_CACHE_BYTES`) | The oldest saved entries are evicted first |
+| Photos on the device (`report-photos` in the document directory) | 40 photos and 100 MB | `src/photos/photoStore.ts` (`MAX_STORED_PHOTOS`, `MAX_STORED_PHOTO_BYTES`) | New photos can't be attached until queued reports are sent or discarded |
+
+The cache holds only copies of server data, so evicting it loses nothing. The
+report queue is stored separately and is never evicted. Photos of queued
+reports, pending or not sent, are never deleted to make room. Photos nothing
+references (for example, attached to a report that was never submitted) are
+deleted, oldest first, when the app starts and before a photo is attached,
+once they are an hour old.
+
 ## Local development
 
 ```bash

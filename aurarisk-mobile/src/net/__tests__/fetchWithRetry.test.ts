@@ -62,6 +62,20 @@ describe('fetchWithRetry', () => {
     expect(isServerWaking()).toBe(false);
   });
 
+  it('still returns the last 50x when a backoff sleep overshoots the budget', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue(ok(503)) as unknown as typeof fetch;
+    // The first reads leave room for one backoff; after the sleep the clock has jumped past the
+    // deadline, as an overloaded timer would.
+    const now = jest.spyOn(Date, 'now');
+    now.mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(10_000);
+
+    const response = await fetchWithRetry('https://api.test/api/risk', {}, { ...fast, budgetMs: 150, fetchImpl });
+
+    now.mockRestore();
+    expect(response.status).toBe(503);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('gives up with a timeout error when the server never answers', async () => {
     const fetchImpl = jest.fn(hangingFetch) as unknown as typeof fetch;
 

@@ -7,9 +7,11 @@ import { ensureSession } from './src/auth/authClient';
 import { registerBackgroundRefreshAsync } from './src/background/backgroundRefresh';
 import LocationPicker from './src/components/LocationPicker';
 import NotificationSettings from './src/components/NotificationSettings';
+import QueuedReports from './src/components/QueuedReports';
 import ReportComposer from './src/components/ReportComposer';
 import { useOfflineSync } from './src/hooks/useOfflineSync';
 import { setupNotifications } from './src/notifications/setup';
+import { pruneOrphanPhotos } from './src/photos/photoStore';
 import LanguageToggle from './src/components/LanguageToggle';
 import RiskPanel from './src/components/RiskPanel';
 import { I18nProvider, useT } from './src/i18n';
@@ -27,20 +29,22 @@ export default function App() {
 
 function Main() {
   const { t } = useT();
-  const { pendingCount, isSyncing, refreshPendingCount } = useOfflineSync();
+  const { queue, pendingCount, failedCount, isSyncing, refreshQueue, syncPendingReports } = useOfflineSync();
   const [location, setLocation] = useState<Location | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const serverWaking = useServerWaking();
 
   const onReportSubmitted = useCallback(() => {
-    refreshPendingCount();
+    refreshQueue();
     setRefreshKey((k) => k + 1);
-  }, [refreshPendingCount]);
+  }, [refreshQueue]);
 
   useEffect(() => {
     warmUpServer(fetchWithRetry);
     ensureSession().catch((err) => console.warn('Device registration deferred:', err));
     registerBackgroundRefreshAsync().catch((err) => console.warn('Background refresh unavailable:', err));
+    // Photos left behind by a report that was never submitted; queued reports' photos are kept.
+    pruneOrphanPhotos().catch((err) => console.warn('Photo cleanup failed:', err));
     return setupNotifications();
   }, []);
 
@@ -59,6 +63,12 @@ function Main() {
               {isSyncing ? t('mobile.sendingQueued') : t('mobile.waiting', { count: pendingCount })}
             </Text>
           )}
+          {failedCount > 0 && (
+            <Text style={[styles.banner, styles.failedBanner]} accessibilityLiveRegion="polite">
+              {t('mobile.notSent', { count: failedCount })}
+            </Text>
+          )}
+          <QueuedReports queue={queue} onRequeued={syncPendingReports} />
           <LocationPicker value={location} onChange={setLocation} />
           {location && <RiskPanel location={location} refreshKey={refreshKey} />}
           <ReportComposer location={location} onSubmitted={onReportSubmitted} />
@@ -74,4 +84,5 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#fff' },
   container: { padding: 16, gap: 32 },
   banner: { backgroundColor: '#fff4ce', padding: 10, borderRadius: 6 },
+  failedBanner: { backgroundColor: '#fde7e9' },
 });

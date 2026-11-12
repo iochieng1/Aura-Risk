@@ -61,11 +61,17 @@ export const fetchWithRetry = async (url: string, init: RequestInit = {}, option
   };
   const slowTimer = setTimeout(markSlow, slowAfterMs);
   let attempt = 0;
+  // The last retryable response, so a budget that runs out during a backoff sleep (timers can
+  // overshoot) still gives the caller the server's 50x rather than a timeout.
+  let lastResponse: Response | undefined;
 
   try {
     for (;;) {
       const remaining = deadline - Date.now();
-      if (remaining <= 0) throw new RequestTimeoutError(url, budgetMs);
+      if (remaining <= 0) {
+        if (lastResponse) return lastResponse;
+        throw new RequestTimeoutError(url, budgetMs);
+      }
 
       // A non-idempotent request gets one attempt, so let it wait for the whole budget.
       const timeoutMs = retryOnTimeout ? Math.min(attemptTimeoutMs, remaining) : remaining;
@@ -82,6 +88,7 @@ export const fetchWithRetry = async (url: string, init: RequestInit = {}, option
       }
 
       if (response && !RETRYABLE_STATUS.has(response.status)) return response;
+      lastResponse = response;
       if (!response && !retryOnTimeout) {
         throw controller.signal.aborted ? new RequestTimeoutError(url, budgetMs) : failure;
       }

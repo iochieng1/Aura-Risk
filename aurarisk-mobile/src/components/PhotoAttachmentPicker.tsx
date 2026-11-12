@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useT } from '../i18n';
-import { deleteLocalPhoto, MAX_PHOTOS_PER_REPORT, pickPhotosFromLibrary, takePhoto } from '../photos/photoStore';
+import {
+  deleteLocalPhoto,
+  MAX_PHOTOS_PER_REPORT,
+  photoCapacity,
+  PhotoStorageFullError,
+  pickPhotosFromLibrary,
+  takePhoto,
+} from '../photos/photoStore';
 
 interface Props {
   photos: string[];
@@ -19,14 +26,25 @@ export default function PhotoAttachmentPicker({ photos, onChange }: Props) {
     setError(null);
     setBusy(true);
     try {
-      const added = source === 'library' ? await pickPhotosFromLibrary(remaining) : await takePhoto();
+      // Photos of unsent reports are never deleted to make room, so a full store refuses new ones.
+      const capacity = Math.min(remaining, await photoCapacity(photos));
+      if (capacity <= 0) {
+        setError(t('mobile.photoStorageFull'));
+        return;
+      }
+      const added = source === 'library' ? await pickPhotosFromLibrary(capacity) : await takePhoto();
       if (added === 'permission_denied') {
         setError(t('mobile.cameraDenied'));
         return;
       }
       onChange([...photos, ...added].slice(0, MAX_PHOTOS_PER_REPORT));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('mobile.photoFailed'));
+      if (err instanceof PhotoStorageFullError) {
+        onChange([...photos, ...err.prepared].slice(0, MAX_PHOTOS_PER_REPORT));
+        setError(t('mobile.photoStorageFull'));
+      } else {
+        setError(err instanceof Error ? err.message : t('mobile.photoFailed'));
+      }
     } finally {
       setBusy(false);
     }
