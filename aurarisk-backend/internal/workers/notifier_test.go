@@ -1,11 +1,28 @@
 package workers
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"aurarisk-backend/internal/models"
 	"aurarisk-backend/internal/services"
 )
+
+// Push alerts name the subscribed place (#85).
+func TestAlertMessageNamesPlace(t *testing.T) {
+	sub := notifierSubscription{ID: "s1", Name: "Kibera", Lat: -1.31, Lon: 36.79}
+	// Assessments are shared by nearby subscriptions, so this one may carry
+	// another subscription's name; the alert must use its own.
+	assessment := &models.RiskAssessment{Location: models.Location{Name: "Other Place"}, Level: "Alert", Score: 62,
+		Summary: "Flood risk for Other Place is currently Alert with a risk score of 62/100.",
+		Tips:    []string{"Avoid walking or driving through floodwater."}}
+	msg := alertMessage("ExponentPushToken[x]", sub, assessment)
+	text := msg.Title + " " + msg.Body
+	if msg.Title != "Alert: Kibera" || strings.Contains(text, "Other Place") || strings.Contains(text, "Selected Location") {
+		t.Fatalf("title %q, body %q", msg.Title, msg.Body)
+	}
+}
 
 func TestDecide(t *testing.T) {
 	// 12:00 UTC is 15:00 in Nairobi.

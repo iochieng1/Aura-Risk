@@ -214,8 +214,11 @@ func WeatherCircuitOpen() bool {
 // GenerateRiskAssessment scores flood risk at a point. When the weather
 // provider is failing it may use cached data, in which case the result is
 // marked Stale. It returns ErrWeatherUnavailable when there is nothing to use.
+// An empty locationName is resolved with PlaceName.
 func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName string) (*models.RiskAssessment, error) {
-	// Weather and the ground and river inputs are fetched concurrently.
+	// Weather, the ground and river inputs, and the place name are fetched
+	// concurrently.
+	name := resolvePlaceName(ctx, lat, lon, locationName)
 	hydrology := make(chan Hydrology, 1)
 	configured := hydrologyService != nil
 	go func() {
@@ -226,7 +229,19 @@ func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName 
 	if err != nil {
 		return nil, err
 	}
-	return assess(lat, lon, locationName, w, <-hydrology, configured, time.Now()), nil
+	return assess(lat, lon, <-name, w, <-hydrology, configured, time.Now()), nil
+}
+
+// resolvePlaceName returns name, or looks one up in the background when it
+// is empty. The channel always receives exactly one name.
+func resolvePlaceName(ctx context.Context, lat, lon float64, name string) <-chan string {
+	ch := make(chan string, 1)
+	if name != "" {
+		ch <- name
+		return ch
+	}
+	go func() { ch <- PlaceName(ctx, lat, lon) }()
+	return ch
 }
 
 // AssessClientWeather scores weather the client fetched from Open-Meteo
@@ -235,7 +250,9 @@ func GenerateRiskAssessment(ctx context.Context, lat, lon float64, locationName 
 // ValidateClientWeather first; it is never cached or used for push alerts.
 // Ground and river inputs are the server's own where it has them; client
 // ones (checked with ClientTerrain and ClientRiver) only fill the gaps.
+// An empty locationName is resolved with PlaceName.
 func AssessClientWeather(ctx context.Context, lat, lon float64, locationName string, weather *OpenMeteoResponse, client Hydrology, now time.Time) *models.RiskAssessment {
+	name := resolvePlaceName(ctx, lat, lon, locationName)
 	h, configured := getHydrology(ctx, lat, lon)
 	var fromDevice []string
 	if h.Terrain == nil && client.Terrain != nil {
@@ -246,7 +263,7 @@ func AssessClientWeather(ctx context.Context, lat, lon float64, locationName str
 		h.River = client.River
 		fromDevice = append(fromDevice, "River discharge was fetched by your device rather than the AuraRisk server.")
 	}
-	risk := assess(lat, lon, locationName, WeatherResult{Data: weather, FetchedAt: now}, h, configured, now)
+	risk := assess(lat, lon, <-name, WeatherResult{Data: weather, FetchedAt: now}, h, configured, now)
 	risk.Confidence.Reasons = append(risk.Confidence.Reasons,
 		"Weather data was fetched by your device rather than the AuraRisk server.")
 	risk.Confidence.Reasons = append(risk.Confidence.Reasons, fromDevice...)

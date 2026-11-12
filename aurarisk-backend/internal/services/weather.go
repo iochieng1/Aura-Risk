@@ -54,7 +54,7 @@ type WeatherConfig struct {
 
 func (c WeatherConfig) withDefaults() WeatherConfig {
 	if c.GridDegrees <= 0 {
-		c.GridDegrees = 0.02
+		c.GridDegrees = defaultGridDegrees
 	}
 	if c.FreshFor <= 0 {
 		c.FreshFor = 15 * time.Minute
@@ -132,9 +132,16 @@ func NewWeatherService(fetcher WeatherFetcher, cfg WeatherConfig) *WeatherServic
 }
 
 func (s *WeatherService) cell(lat, lon float64) (cellKey, float64, float64) {
-	g := s.cfg.GridDegrees
+	return gridCell(lat, lon, s.cfg.GridDegrees)
+}
+
+// defaultGridDegrees is the cache cell size: 0.02° is about 2 km.
+const defaultGridDegrees = 0.02
+
+// gridCell returns the g-degree grid cell holding a point and the cell's
+// centre. Fetch at the centre so cached data represents the whole cell.
+func gridCell(lat, lon, g float64) (cellKey, float64, float64) {
 	k := cellKey{int64(math.Floor(lat / g)), int64(math.Floor(lon / g))}
-	// Fetch at the cell's centre so the cached data represents the whole cell.
 	return k, (float64(k.lat) + 0.5) * g, (float64(k.lon) + 0.5) * g
 }
 

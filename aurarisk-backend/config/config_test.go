@@ -27,7 +27,7 @@ func (f *fakeFetcher) GetSecret(_ context.Context, id string) (string, error) {
 // when the test ends.
 func clearEnv(t *testing.T) {
 	t.Helper()
-	keys := []string{"APP_ENV", "NOTIFIER_INTERVAL", "LOG_FORMAT", "COUNTY_WEBHOOKS", "AT_USERNAME"}
+	keys := []string{"APP_ENV", "NOTIFIER_INTERVAL", "LOG_FORMAT", "COUNTY_WEBHOOKS", "AT_USERNAME", "NOMINATIM_URL"}
 	for _, key := range SecretKeys {
 		keys = append(keys, key, key+"_FILE")
 	}
@@ -329,6 +329,19 @@ func TestValidateRejectsUnknownLogFormat(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://postgres:password@localhost:5432/aurarisk?sslmode=disable")
 	t.Setenv("LOG_FORMAT", "xml")
 	if err := Validate(); err == nil || !strings.Contains(err.Error(), "LOG_FORMAT") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestValidateNominatimURL(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("DATABASE_URL", "postgres://u:p@db/app")
+	t.Setenv("NOMINATIM_URL", "http://nominatim:8080")
+	if err := Validate(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("NOMINATIM_URL", "nominatim.example.org")
+	if err := Validate(); err == nil || !strings.Contains(err.Error(), "NOMINATIM_URL") {
 		t.Fatalf("err = %v", err)
 	}
 }
