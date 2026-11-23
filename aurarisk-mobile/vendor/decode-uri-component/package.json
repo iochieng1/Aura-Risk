@@ -1,0 +1,8 @@
+{
+  "name": "decode-uri-component",
+  "version": "0.0.0-aurarisk.1",
+  "description": "Linear-time, CommonJS stand-in for decode-uri-component. See README.md.",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true
+}

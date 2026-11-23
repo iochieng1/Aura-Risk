@@ -35,7 +35,8 @@ export const setupNotifications = (onRiskAlertOpened?: RiskAlertHandler): (() =>
     const data = response.notification.request.content.data;
     if (!isRiskAlert(data)) return;
     console.log(`Risk alert opened: subscription ${data.subscription_id} level ${data.level}`);
-    await fetchRiskAssessment(data.lat, data.lon);
+    // Warm the cache first so the Risk tab opens on fresh data, but never let it block opening the alert.
+    await fetchRiskAssessment(data.lat, data.lon).catch((err) => console.warn('Risk refresh for alert failed:', err));
     onRiskAlertOpened?.(data);
   };
 

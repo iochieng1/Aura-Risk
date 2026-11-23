@@ -57,5 +57,8 @@ export const useOfflineSync = () => {
 
   const { pending: pendingCount, failed: failedCount } = useMemo(() => countQueue(queue), [queue]);
 
-  return { syncPendingReports, refreshQueue, isSyncing, queue, pendingCount, failedCount };
+  return useMemo(
+    () => ({ syncPendingReports, refreshQueue, isSyncing, queue, pendingCount, failedCount }),
+    [syncPendingReports, refreshQueue, isSyncing, queue, pendingCount, failedCount]
+  );
 };
