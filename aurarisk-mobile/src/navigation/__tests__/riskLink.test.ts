@@ -55,4 +55,18 @@ describe('resolveRiskLink', () => {
     expect(resolveRiskLink({ lat: '', lon: '36' }, [], 'Pin')).toBeNull();
     expect(resolveRiskLink({ lat: '95', lon: '36' }, [], 'Pin')).toBeNull();
   });
+
+  it('accepts only plain decimal coordinates', () => {
+    expect(resolveRiskLink({ lat: '0x0', lon: '36' }, [], 'Pin')).toBeNull();
+    expect(resolveRiskLink({ lat: '1', lon: '1e1' }, [], 'Pin')).toBeNull();
+    expect(resolveRiskLink({ lat: ' 1', lon: '36' }, [], 'Pin')).toBeNull();
+  });
+
+  it('does not name a far-away location after a followed one', () => {
+    expect(resolveRiskLink({ subscription: 'sub-1', lat: '0', lon: '10' }, [home], 'Alert location')?.location).toEqual({
+      name: 'Alert location',
+      lat: 0,
+      lon: 10,
+    });
+  });
 });

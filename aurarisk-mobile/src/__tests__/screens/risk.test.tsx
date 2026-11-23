@@ -10,7 +10,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 let mockParams: Record<string, string> = {};
 const mockSetParams = jest.fn();
 jest.mock('expo-router', () => ({
-  router: { setParams: (...args: unknown[]) => mockSetParams(...args) },
+  useNavigation: () => ({ setParams: (...args: unknown[]) => mockSetParams(...args) }),
   useLocalSearchParams: () => mockParams,
 }));
 

@@ -8,6 +8,7 @@ import Screen from '../../components/Screen';
 import { useT } from '../../i18n';
 import { clearLocalPushConsent } from '../../notifications/push';
 import { clearCachedSubscriptions } from '../../notifications/subscriptions';
+import { useAppState } from '../../state/AppState';
 
 const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 
@@ -17,13 +18,21 @@ type DeleteState = 'idle' | 'deleting' | 'deleted' | 'failed';
 export default function SettingsScreen() {
   const { t } = useT();
   const [deleteState, setDeleteState] = useState<DeleteState>('idle');
+  const { onAccountDeleted } = useAppState();
+  // Once deleted there is nothing left to delete; pressing again would only register and delete a new account.
+  const deleteDisabled = deleteState === 'deleting' || deleteState === 'deleted';
 
   const runDelete = async () => {
     setDeleteState('deleting');
     try {
+      // Cleared first: the cache is only a copy of the server's list, and a leftover copy would be
+      // re-created under a new account by restoreCachedSubscriptions. If this fails, nothing is deleted.
+      await clearCachedSubscriptions();
       await deleteAccount();
-      // The server removed these with the account; drop the local copies so nothing re-creates them.
-      await Promise.all([clearCachedSubscriptions(), clearLocalPushConsent()]).catch(() => undefined);
+      // After the server call, so a failed deletion leaves push turned on as the server still has it.
+      // If this fails the user sees the error and can try again; a retry clears it.
+      await clearLocalPushConsent();
+      onAccountDeleted();
       setDeleteState('deleted');
     } catch (err) {
       console.warn('Account deletion failed:', err);
@@ -53,10 +62,10 @@ export default function SettingsScreen() {
         <Text style={styles.body}>{t('mobile.accountBody')}</Text>
         <Pressable
           onPress={confirmDelete}
-          disabled={deleteState === 'deleting'}
-          style={[styles.danger, deleteState === 'deleting' && styles.disabled]}
+          disabled={deleteDisabled}
+          style={[styles.danger, deleteDisabled && styles.disabled]}
           accessibilityRole="button"
-          accessibilityState={{ disabled: deleteState === 'deleting', busy: deleteState === 'deleting' }}
+          accessibilityState={{ disabled: deleteDisabled, busy: deleteState === 'deleting' }}
         >
           {deleteState === 'deleting' ? (
             <ActivityIndicator color="#fff" accessibilityLabel={t('mobile.deleting')} />

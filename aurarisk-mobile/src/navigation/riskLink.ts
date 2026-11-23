@@ -21,11 +21,17 @@ export const riskAlertHref = (alert: RiskAlertData) => ({
 const first = (value: string | string[] | undefined): string | undefined =>
   Array.isArray(value) ? value[0] : value;
 
-const toNumber = (value: string | undefined): number | undefined => {
-  if (value === undefined || value.trim() === '') return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-};
+// Plain decimals only: Number() would also take hex ("0x0"), exponents ("1e1") and padding.
+const DECIMAL = /^-?\d+(\.\d+)?$/;
+
+const toNumber = (value: string | undefined): number | undefined =>
+  value !== undefined && DECIMAL.test(value) ? Number(value) : undefined;
+
+/**
+ * How far (in degrees, about 5 km) link coordinates may sit from a followed location and still be
+ * named after it. Alerts carry the followed location's coordinates, possibly rounded.
+ */
+const SAME_PLACE_DEGREES = 0.05;
 
 export interface ResolvedRiskLink {
   location: Location;
@@ -49,7 +55,12 @@ export const resolveRiskLink = (
   const lon = toNumber(first(params.lon)) ?? subscription?.lon;
   if (lat === undefined || lon === undefined) return null;
 
-  const checked = validateLocation({ name: subscription?.name ?? fallbackName, lat, lon });
+  // Only borrow the followed location's name when the link actually points at it.
+  const isSamePlace =
+    subscription !== undefined &&
+    Math.abs(lat - subscription.lat) <= SAME_PLACE_DEGREES &&
+    Math.abs(lon - subscription.lon) <= SAME_PLACE_DEGREES;
+  const checked = validateLocation({ name: isSamePlace ? subscription.name : fallbackName, lat, lon });
   if (!checked.ok) return null;
   return { location: checked.value, subscription };
 };

@@ -14,6 +14,9 @@ interface AppState {
   onReportSubmitted: () => void;
   /** The report queue and its sync state, shared so one NetInfo listener drives every screen. */
   sync: OfflineSync;
+  /** Bumped when the account is deleted, so screens holding account data (followed locations) reload. */
+  accountGeneration: number;
+  onAccountDeleted: () => void;
 }
 
 const AppStateContext = createContext<AppState | null>(null);
@@ -23,6 +26,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const sync = useOfflineSync();
   const [location, setLocation] = useState<Location | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [accountGeneration, setAccountGeneration] = useState(0);
   const { refreshQueue } = sync;
 
   const onReportSubmitted = useCallback(() => {
@@ -30,9 +34,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setRefreshKey((k) => k + 1);
   }, [refreshQueue]);
 
+  const onAccountDeleted = useCallback(() => setAccountGeneration((g) => g + 1), []);
+
   const value = useMemo<AppState>(
-    () => ({ location, setLocation, refreshKey, onReportSubmitted, sync }),
-    [location, refreshKey, onReportSubmitted, sync]
+    () => ({ location, setLocation, refreshKey, onReportSubmitted, sync, accountGeneration, onAccountDeleted }),
+    [location, refreshKey, onReportSubmitted, sync, accountGeneration, onAccountDeleted]
   );
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }

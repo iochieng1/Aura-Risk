@@ -1,5 +1,5 @@
 import type { Location } from '@aurarisk/shared';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import LocationPicker from '../../components/LocationPicker';
@@ -14,6 +14,7 @@ import { useAppState } from '../../state/AppState';
 export default function RiskScreen() {
   const { t } = useT();
   const { location, setLocation, refreshKey } = useAppState();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<RiskLinkParams & Record<string, string | string[]>>();
   // The location an alert or link opened; the notice shows until the user picks another one.
   const [linked, setLinked] = useState<Location | null>(null);
@@ -23,16 +24,20 @@ export default function RiskScreen() {
   useEffect(() => {
     if (subscription === undefined && lat === undefined && lon === undefined) return;
     let cancelled = false;
-    getCachedSubscriptions().then((subscriptions) => {
-      if (cancelled) return;
-      const resolved = resolveRiskLink({ subscription, lat, lon }, subscriptions, t('mobile.alertLocation'));
-      if (!resolved) return;
-      setLinked(resolved.location);
-      setLocation(resolved.location);
-    }).finally(() => {
-      // Consumed: clear the params so tapping the same alert again later is seen as a change.
-      if (!cancelled) router.setParams({ subscription: undefined, lat: undefined, lon: undefined });
-    });
+    getCachedSubscriptions()
+      .then((subscriptions) => {
+        if (cancelled) return;
+        const resolved = resolveRiskLink({ subscription, lat, lon }, subscriptions, t('mobile.alertLocation'));
+        if (!resolved) return;
+        setLinked(resolved.location);
+        setLocation(resolved.location);
+      })
+      .catch((err) => console.warn('Could not open risk link:', err))
+      .finally(() => {
+        // Consumed: clear the params so tapping the same alert again later is seen as a change. This
+        // screen's own navigation object targets the Risk route even if another tab is focused by now.
+        if (!cancelled) navigation.setParams({ subscription: undefined, lat: undefined, lon: undefined } as never);
+      });
     return () => {
       cancelled = true;
     };
